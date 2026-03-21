@@ -32,7 +32,10 @@ jobs:
           darwin amd64
           darwin arm64
           EOF
-          sha256sum dist/openmeteo-cli_* > dist/checksums.txt
+          (
+            cd dist
+            sha256sum openmeteo-cli_* > checksums.txt
+          )
 
       - name: Publish release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b

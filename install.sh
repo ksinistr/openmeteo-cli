@@ -52,7 +52,18 @@ checksums_path="${tmp_dir}/${checksums_name}"
 curl -fsSL "${asset_url}" -o "${binary_path}"
 curl -fsSL "${checksums_url}" -o "${checksums_path}"
 
-expected_checksum="$(awk -v asset="${asset_name}" '$2 == asset { print $1 }' "${checksums_path}")"
+expected_checksum="$(
+  awk -v asset="${asset_name}" '
+    {
+      name = $2
+      sub(/^.*\//, "", name)
+      if (name == asset) {
+        print $1
+        exit
+      }
+    }
+  ' "${checksums_path}"
+)"
 if [ -z "${expected_checksum}" ]; then
   printf 'missing checksum for %s\n' "${asset_name}" >&2
   exit 1
