@@ -30,3 +30,17 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# ralphex progress logs
+.ralphex/progress/
+
+# Go build cache
+go/
+gocache/
+gomodcache/
+bin/
+dist/
+openmeteo-cli.init/go/
+openmeteo-cli.init/gocache/
+openmeteo-cli.init/gomodcache/
+openmeteo-cli.init/bin/
