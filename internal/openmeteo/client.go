@@ -2,10 +2,14 @@ package openmeteo
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 )
+
+// ErrUpstreamAPI is returned when the Open-Meteo API returns an error.
+var ErrUpstreamAPI = errors.New("upstream API error")
 
 // HTTPClient is an interface for HTTP requests.
 type HTTPClient interface {
@@ -110,7 +114,7 @@ func (c *Client) FetchForecast(lat, lon float64, units, timezone string, forecas
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: API returned status %d", ErrUpstreamAPI, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -139,6 +143,11 @@ func (c *Client) buildRequest(lat, lon float64, units, timezone string, forecast
 		timezone,
 		forecastDays,
 	)
+
+	// Add units parameter if specified
+	if units != "" && units != "metric" {
+		url += fmt.Sprintf("&units=%s", units)
+	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

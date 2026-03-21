@@ -1,9 +1,6 @@
-// Package app contains the application logic for openmeteo-cli.
 package app
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +8,7 @@ import (
 	"openmeteo-cli/internal/cli"
 	"openmeteo-cli/internal/forecast"
 	"openmeteo-cli/internal/openmeteo"
+	"openmeteo-cli/internal/output"
 	"openmeteo-cli/internal/weathercode"
 )
 
@@ -59,11 +57,16 @@ func Run(args []string) int {
 	}
 
 	if errResult != nil {
+		// Check for upstream API errors (exit 4)
+		if errors.Is(errResult, openmeteo.ErrUpstreamAPI) {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", errResult)
+			return 4
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errResult)
 		return handleError(errResult)
 	}
 
-	return writeOutput(result, cfg.Format)
+	return writeOutput(cfg.Format, result)
 }
 
 func handleError(err error) int {
@@ -73,13 +76,13 @@ func handleError(err error) int {
 	return 6
 }
 
-func writeOutput(data interface{}, format string) int {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(data); err != nil {
+func writeOutput(format string, data interface{}) int {
+	w := output.NewWriter()
+	if err := w.Write(data, format); err != nil {
+		if output.IsEncodingError(err) {
+			return 6
+		}
 		return 6
 	}
-	fmt.Print(buf.String())
 	return 0
 }
