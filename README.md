@@ -4,7 +4,7 @@ A command-line weather tool built especially for AI agents.
 
 ## Overview
 
-`openmeteo-cli` fetches weather forecast data from the Open-Meteo API and outputs it in human-readable `toon` or machine-readable `json` formats.
+`openmeteo-cli` fetches weather forecast data from the [Open-Meteo API](https://open-meteo.com/) and outputs it in human-readable `toon` or machine-readable `json` formats.
 
 The CLI is designed especially for AI agents and automation workflows. `toon` is the default because it stays structured while using fewer tokens than heavier text or JSON output in normal agent conversations.
 
