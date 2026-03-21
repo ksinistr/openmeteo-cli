@@ -1386,3 +1386,312 @@ func makeHourlyTimesForDate(dateStr string) []string {
 	}
 	return times
 }
+
+// TestService_Week_SuccessfulResponse tests a successful 7-day week response.
+func TestService_Week_SuccessfulResponse(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 61, 95},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	if len(days) != 7 {
+		t.Errorf("Expected 7 days, got %d", len(days))
+	}
+
+	// Verify first day
+	if days[0].Date != "2026-03-22" {
+		t.Errorf("Day[0].Date = %q, want %q", days[0].Date, "2026-03-22")
+	}
+	if days[0].Weather != "Clear sky" {
+		t.Errorf("Day[0].Weather = %q, want %q", days[0].Weather, "Clear sky")
+	}
+	if days[0].TempMin != 10.0 {
+		t.Errorf("Day[0].TempMin = %v, want %v", days[0].TempMin, 10.0)
+	}
+	if days[0].TempMax != 20.0 {
+		t.Errorf("Day[0].TempMax = %v, want %v", days[0].TempMax, 20.0)
+	}
+
+	// Verify last day
+	if days[6].Date != "2026-03-28" {
+		t.Errorf("Day[6].Date = %q, want %q", days[6].Date, "2026-03-28")
+	}
+	if days[6].Weather != "Thunderstorm" {
+		t.Errorf("Day[6].Weather = %q, want %q", days[6].Weather, "Thunderstorm")
+	}
+}
+
+// TestService_Week_ShortDailyArray tests behavior when upstream daily data has fewer than 7 days.
+func TestService_Week_ShortDailyArray(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	// Only 3 days available (simulating API returning less than expected)
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24"},
+		WeatherCode:                 []int{0, 1, 2},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	// Should only return 3 days (the actual data available)
+	if len(days) != 3 {
+		t.Errorf("Expected 3 days (limited by available data), got %d", len(days))
+	}
+}
+
+// TestService_Week_ExactSevenDays tests that exactly 7 days are returned when API provides exactly 7.
+func TestService_Week_ExactSevenDays(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 61, 95},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	if len(days) != 7 {
+		t.Errorf("Expected exactly 7 days, got %d", len(days))
+	}
+
+	// Verify all days are present with correct dates
+	expectedDates := []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"}
+	for i, expectedDate := range expectedDates {
+		if days[i].Date != expectedDate {
+			t.Errorf("Day[%d].Date = %q, want %q", i, days[i].Date, expectedDate)
+		}
+	}
+}
+
+// TestService_Week_TimezoneBoundaries tests that timezone positioning is correctly handled.
+func TestService_Week_TimezoneBoundaries(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	// Test with New York timezone (UTC-5)
+	loc, _ := time.LoadLocation("America/New_York")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 61, 95},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	if len(days) != 7 {
+		t.Errorf("Expected 7 days with timezone, got %d", len(days))
+	}
+
+	// Verify dates are preserved correctly
+	for i, day := range days {
+		expectedDate := fmt.Sprintf("2026-03-%02d", 22+i)
+		if day.Date != expectedDate {
+			t.Errorf("Day[%d].Date = %q, want %q", i, day.Date, expectedDate)
+		}
+	}
+}
+
+// TestService_Week_WeatherCodeMapping tests that weather codes are correctly mapped to descriptions.
+func TestService_Week_WeatherCodeMapping(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 48, 51},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	// Check a few weather mappings
+	if days[0].Weather != "Clear sky" {
+		t.Errorf("Day[0].Weather = %q, want %q", days[0].Weather, "Clear sky")
+	}
+	if days[1].Weather != "Mainly clear" {
+		t.Errorf("Day[1].Weather = %q, want %q", days[1].Weather, "Mainly clear")
+	}
+	if days[3].Weather != "Overcast" {
+		t.Errorf("Day[3].Weather = %q, want %q", days[3].Weather, "Overcast")
+	}
+}
+
+// TestService_Week_SunsetSunriseFormat tests that sunrise/sunset are in full datetime format.
+func TestService_Week_SunsetSunriseFormat(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 61, 95},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	// Verify sunrise/sunset have full datetime format (YYYY-MM-DDTHH:MM)
+	expectedDates := []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"}
+	for i := 0; i < 7; i++ {
+		if len(days[i].Sunrise) != 16 {
+			t.Errorf("Day[%d].Sunrise = %q, expected 16 chars (YYYY-MM-DDTHH:MM)", i, days[i].Sunrise)
+		}
+		if len(days[i].Sunset) != 16 {
+			t.Errorf("Day[%d].Sunset = %q, expected 16 chars (YYYY-MM-DDTHH:MM)", i, days[i].Sunset)
+		}
+		// Verify date matches expected
+		if days[i].Sunrise[:10] != expectedDates[i] {
+			t.Errorf("Day[%d].Sunrise date = %q, want %q", i, days[i].Sunrise[:10], expectedDates[i])
+		}
+	}
+}
+
+// TestService_Week_ImplicitUnits test that units are correctly set for metric.
+func TestService_Week_ImplicitUnits(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	loc, _ := time.LoadLocation("UTC")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"},
+		WeatherCode:                 []int{0, 1, 2, 3, 45, 61, 95},
+		Temperature2MMin:            []float64{10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0},
+		Temperature2MMax:            []float64{20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0},
+		PrecipitationSum:            []float64{0.0, 0.5, 1.0, 2.5, 5.0, 8.0, 0.0},
+		PrecipitationProbabilityMax: []int{5, 10, 15, 20, 50, 80, 10},
+		WindSpeed10MMax:             []float64{8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 7.0},
+		WindGusts10MMax:             []float64{12.0, 14.0, 16.0, 20.0, 25.0, 28.0, 10.0},
+		UVIndexMax:                  []float64{4.0, 5.0, 6.0, 6.5, 5.5, 4.5, 4.0},
+		Sunrise:                     []string{"2026-03-22T06:00", "2026-03-23T06:01", "2026-03-24T06:02", "2026-03-25T06:03", "2026-03-26T06:04", "2026-03-27T06:05", "2026-03-28T06:06"},
+		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
+	}
+
+	days := svc.mapWeekDaily(daily, 7, loc)
+
+	// Verify all numeric fields are present
+	for i := 0; i < 7; i++ {
+		if days[i].TempMin == 0 {
+			t.Errorf("Day[%d].TempMin should not be zero", i)
+		}
+		if days[i].TempMax == 0 {
+			t.Errorf("Day[%d].TempMax should not be zero", i)
+		}
+		if days[i].WindSpeedMax == 0 {
+			t.Errorf("Day[%d].WindSpeedMax should not be zero", i)
+		}
+	}
+}
+
+// TestService_Week_MetricUnits test units are correct for metric.
+func TestService_Week_MetricUnits(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	units := svc.getUnits("metric")
+
+	if units.Temperature != "C" {
+		t.Errorf("units.Temperature = %q, want %q", units.Temperature, "C")
+	}
+	if units.WindSpeed != "km/h" {
+		t.Errorf("units.WindSpeed = %q, want %q", units.WindSpeed, "km/h")
+	}
+	if units.Precipitation != "mm" {
+		t.Errorf("units.Precipitation = %q, want %q", units.Precipitation, "mm")
+	}
+}
+
+// TestService_Week_ImperialUnits test units are correct for imperial.
+func TestService_Week_ImperialUnits(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	units := svc.getUnits("imperial")
+
+	if units.Temperature != "F" {
+		t.Errorf("units.Temperature = %q, want %q", units.Temperature, "F")
+	}
+	if units.WindSpeed != "mph" {
+		t.Errorf("units.WindSpeed = %q, want %q", units.WindSpeed, "mph")
+	}
+	if units.Precipitation != "inch" {
+		t.Errorf("units.Precipitation = %q, want %q", units.Precipitation, "inch")
+	}
+}

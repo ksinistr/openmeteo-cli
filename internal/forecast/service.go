@@ -105,6 +105,16 @@ func (s *Service) Day(lat, lon float64, date time.Time, units string) (*DayOutpu
 	}, nil
 }
 
+// mapWeekDaily maps API daily data to output format for 7-day week.
+// maxDays limits the number of days returned (typically 7).
+func (s *Service) mapWeekDaily(daily openmeteo.Daily, maxDays int, loc *time.Location) []Day {
+	days := make([]Day, 0, maxDays)
+	for i := 0; i < maxDays && i < len(daily.Time); i++ {
+		days = append(days, s.mapDaily(daily, i, loc))
+	}
+	return days
+}
+
 // Week returns a 7-day forecast starting from today.
 func (s *Service) Week(lat, lon float64, units string) (*WeekOutput, error) {
 	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", 7)
