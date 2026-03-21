@@ -28,10 +28,15 @@ func Run(args []string) int {
 		// Check for validation errors (exit 3) vs invalid argument errors (exit 2)
 		var ve *cli.ValidationError
 		var ia *cli.InvalidArgumentError
-		if errors.As(err, &ve) || errors.As(err, &ia) {
+		if errors.As(err, &ia) {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 2
+		}
+		if errors.As(err, &ve) {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return 3
 		}
+		// Fallback for other errors
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
 	}

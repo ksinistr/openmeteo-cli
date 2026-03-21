@@ -25,6 +25,15 @@ func NewService(client *openmeteo.Client, mapper *weathercode.Mapper) *Service {
 	}
 }
 
+// NewServiceWithClient is a test helper that creates a new forecast service with a custom client.
+// In production code, use NewService directly.
+func NewServiceWithClient(client *openmeteo.Client, mapper *weathercode.Mapper) *Service {
+	return &Service{
+		client:        client,
+		weatherMapper: mapper,
+	}
+}
+
 // Today returns today's forecast.
 func (s *Service) Today(lat, lon float64, units string) (*TodayOutput, error) {
 	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", 1)
