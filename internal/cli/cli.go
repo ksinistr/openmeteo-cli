@@ -35,8 +35,34 @@ func (e *InvalidArgumentError) Error() string {
 	return e.message
 }
 
+func HasHelpFlag(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
+			return true
+		case "--lat", "--lon", "--units", "--format", "--date":
+			if i+1 < len(args) {
+				i++
+			}
+		}
+	}
+	return false
+}
+
 // Parse parses command-line arguments for the given command.
 func Parse(command string, args []string) (*Config, error) {
+	if HasHelpFlag(args) {
+		cfg := &Config{
+			Command: command,
+			Lat:     0,
+			Lon:     0,
+			Units:   "metric",
+			Format:  "toon",
+			DateStr: "",
+		}
+		return cfg, nil
+	}
+
 	// Default values
 	var lat, lon float64
 	var units, format, dateStr string

@@ -41,6 +41,17 @@ openmeteo-cli day --lat <latitude> --lon <longitude> --date YYYY-MM-DD [options]
 openmeteo-cli week --lat <latitude> --lon <longitude> [options]
 ```
 
+## Help
+
+Show help message for the binary or a specific command:
+
+```bash
+openmeteo-cli -h
+openmeteo-cli --help
+openmeteo-cli today -h
+openmeteo-cli week --help
+```
+
 ## Options
 
 - `--lat <float>` - Latitude coordinate (required, -90 to 90)

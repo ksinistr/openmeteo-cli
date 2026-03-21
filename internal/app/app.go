@@ -13,16 +13,90 @@ import (
 	"openmeteo-cli/internal/weathercode"
 )
 
+const usageRoot = `Usage: openmeteo-cli (today|day|week) [options]
+
+Commands:
+  today  Get today's weather forecast with hourly rows
+  day    Get weather forecast for a specific date
+  week   Get a 7-day weather forecast
+
+Options:
+  --lat <float>      Latitude coordinate (required, -90 to 90)
+  --lon <float>      Longitude coordinate (required, -180 to 180)
+  --date YYYY-MM-DD  Date for the day command (required for day command)
+  --units metric|imperial  Units: metric (default) or imperial
+  --format toon|json       Output format: toon (default) or json
+  -h, --help         Show this help message
+
+Examples:
+  openmeteo-cli today --lat 40.7128 --lon -74.0060
+  openmeteo-cli day --lat 40.7128 --lon -74.0060 --date 2026-03-22
+  openmeteo-cli week --lat 40.7128 --lon -74.0060`
+
+const usageToday = `Usage: openmeteo-cli today --lat <float> --lon <float> [options]
+
+Get today's weather forecast with hourly rows
+
+Options:
+  --lat <float>      Latitude coordinate (required, -90 to 90)
+  --lon <float>      Longitude coordinate (required, -180 to 180)
+  --units metric|imperial  Units: metric (default) or imperial
+  --format toon|json       Output format: toon (default) or json
+  -h, --help           Show this help message`
+
+const usageDay = `Usage: openmeteo-cli day --lat <float> --lon <float> --date YYYY-MM-DD [options]
+
+Get weather forecast for a specific date
+
+Options:
+  --lat <float>      Latitude coordinate (required, -90 to 90)
+  --lon <float>      Longitude coordinate (required, -180 to 180)
+  --date YYYY-MM-DD  Date (required, YYYY-MM-DD format)
+  --units metric|imperial  Units: metric (default) or imperial
+  --format toon|json       Output format: toon (default) or json
+  -h, --help           Show this help message`
+
+const usageWeek = `Usage: openmeteo-cli week --lat <float> --lon <float> [options]
+
+Get a 7-day weather forecast
+
+Options:
+  --lat <float>      Latitude coordinate (required, -90 to 90)
+  --lon <float>      Longitude coordinate (required, -180 to 180)
+  --units metric|imperial  Units: metric (default) or imperial
+  --format toon|json       Output format: toon (default) or json
+  -h, --help           Show this help message`
+
 // Run is the main entrypoint for the application.
 func Run(args []string) int {
+	// Check for help flags before any other processing
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Println(usageRoot)
+		return 0
+	}
+
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: no command specified")
-		fmt.Fprintln(os.Stderr, "Usage: openmeteo-cli (today|day|week) [options]")
+		fmt.Fprintln(os.Stderr, usageRoot)
 		return 2
 	}
 
 	command := args[0]
 	commandArgs := args[1:]
+
+	// Check for help flags on command-specific paths
+	if command == "today" && cli.HasHelpFlag(commandArgs) {
+		fmt.Println(usageToday)
+		return 0
+	}
+	if command == "day" && cli.HasHelpFlag(commandArgs) {
+		fmt.Println(usageDay)
+		return 0
+	}
+	if command == "week" && cli.HasHelpFlag(commandArgs) {
+		fmt.Println(usageWeek)
+		return 0
+	}
 
 	// Validate command before doing any other parsing
 	validCommands := map[string]bool{"today": true, "day": true, "week": true}

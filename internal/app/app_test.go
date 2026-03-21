@@ -98,6 +98,9 @@ func TestRunEmptyArgs(t *testing.T) {
 	if !strings.Contains(stderr, "Error: no command specified") {
 		t.Errorf("Run([]) stderr = %q, want to contain 'Error: no command specified'", stderr)
 	}
+	if !strings.Contains(stderr, "Commands:") {
+		t.Errorf("Run([]) stderr = %q, want to contain full root help", stderr)
+	}
 }
 
 // TestRunNoCommand tests behavior when called with only invalid args (no command).
@@ -392,6 +395,116 @@ func TestRunInvalidArgumentExitCode(t *testing.T) {
 			exitCode := Run(tt.args)
 			if exitCode != tt.want {
 				t.Errorf("Run(%v) exit code = %d, want %d", tt.args, exitCode, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunHelpFlags tests that help flags return exit code 0 and print usage.
+func TestRunHelpFlags(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		wantExitCode int
+		wantOutput   string
+	}{
+		// Root help
+		{"root -h", []string{"-h"}, 0, "Usage: openmeteo-cli (today|day|week)"},
+		{"root --help", []string{"--help"}, 0, "Usage: openmeteo-cli (today|day|week)"},
+		// Command help
+		{"today -h", []string{"today", "-h"}, 0, "Usage: openmeteo-cli today"},
+		{"today --help", []string{"today", "--help"}, 0, "Usage: openmeteo-cli today"},
+		{"day -h", []string{"day", "-h"}, 0, "Usage: openmeteo-cli day"},
+		{"day --help", []string{"day", "--help"}, 0, "Usage: openmeteo-cli day"},
+		{"week -h", []string{"week", "-h"}, 0, "Usage: openmeteo-cli week"},
+		{"week --help", []string{"week", "--help"}, 0, "Usage: openmeteo-cli week"},
+		// Help flag in different position (today)
+		{"today with lat lon and --help", []string{"today", "--lat", "40", "--lon", "-74", "--help"}, 0, "Usage: openmeteo-cli today"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			exitCode := Run(tt.args)
+
+			_ = w.Close()
+			os.Stdout = oldStdout
+
+			var buf bytes.Buffer
+			_, _ = io.Copy(&buf, r)
+			output := buf.String()
+
+			if exitCode != tt.wantExitCode {
+				t.Errorf("Run(%v) exit code = %d, want %d", tt.args, exitCode, tt.wantExitCode)
+			}
+			if !strings.Contains(output, tt.wantOutput) {
+				t.Errorf("Run(%v) stdout = %q, want to contain %q", tt.args, output, tt.wantOutput)
+			}
+		})
+	}
+}
+
+func TestRunDoesNotTreatFlagValuesAsHelp(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		wantExitCode int
+		wantStdErr   string
+	}{
+		{
+			name:         "day date value help token returns date error",
+			args:         []string{"day", "--lat", "40", "--lon", "-74", "--date", "--help"},
+			wantExitCode: 3,
+			wantStdErr:   "Error: invalid date format",
+		},
+		{
+			name:         "units value help token returns validation error",
+			args:         []string{"today", "--lat", "40", "--lon", "-74", "--units", "--help"},
+			wantExitCode: 3,
+			wantStdErr:   "Error: units must be 'metric' or 'imperial'",
+		},
+		{
+			name:         "lat value help token returns parse error",
+			args:         []string{"today", "--lat", "-h", "--lon", "-74"},
+			wantExitCode: 2,
+			wantStdErr:   "Error: invalid lat value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldStdout := os.Stdout
+			stdoutR, stdoutW, _ := os.Pipe()
+			os.Stdout = stdoutW
+
+			oldStderr := os.Stderr
+			stderrR, stderrW, _ := os.Pipe()
+			os.Stderr = stderrW
+
+			exitCode := Run(tt.args)
+
+			_ = stdoutW.Close()
+			os.Stdout = oldStdout
+			_ = stderrW.Close()
+			os.Stderr = oldStderr
+
+			var stdoutBuf bytes.Buffer
+			_, _ = io.Copy(&stdoutBuf, stdoutR)
+
+			var stderrBuf bytes.Buffer
+			_, _ = io.Copy(&stderrBuf, stderrR)
+
+			if exitCode != tt.wantExitCode {
+				t.Fatalf("Run(%v) exit code = %d, want %d", tt.args, exitCode, tt.wantExitCode)
+			}
+			if strings.Contains(stdoutBuf.String(), "Usage: openmeteo-cli") {
+				t.Fatalf("Run(%v) stdout unexpectedly contained help output: %q", tt.args, stdoutBuf.String())
+			}
+			if !strings.Contains(stderrBuf.String(), tt.wantStdErr) {
+				t.Fatalf("Run(%v) stderr = %q, want to contain %q", tt.args, stderrBuf.String(), tt.wantStdErr)
 			}
 		})
 	}

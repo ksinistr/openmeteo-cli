@@ -255,3 +255,123 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestParseWithHelpFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		args    []string
+		wantErr bool
+		errType string
+	}{
+		{
+			name:    "today with -h flag alone",
+			command: "today",
+			args:    []string{"-h"},
+			wantErr: false,
+		},
+		{
+			name:    "today with --help flag alone",
+			command: "today",
+			args:    []string{"--help"},
+			wantErr: false,
+		},
+		{
+			name:    "day with -h flag after valid args",
+			command: "day",
+			args:    []string{"--lat", "40", "--lon", "-74", "-h"},
+			wantErr: false,
+		},
+		{
+			name:    "week with --help flag after valid args",
+			command: "week",
+			args:    []string{"--lat", "40", "--lon", "-74", "--units", "imperial", "--help"},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.command, tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}
+
+func TestParseDoesNotTreatFlagValuesAsHelp(t *testing.T) {
+	tests := []struct {
+		name      string
+		command   string
+		args      []string
+		want      *Config
+		wantErr   bool
+		errString string
+	}{
+		{
+			name:    "day date value can be help token",
+			command: "day",
+			args:    []string{"--lat", "40", "--lon", "-74", "--date", "--help"},
+			want: &Config{
+				Command: "day",
+				Lat:     40,
+				Lon:     -74,
+				Units:   "metric",
+				Format:  "toon",
+				DateStr: "--help",
+			},
+		},
+		{
+			name:      "units value help token stays a value",
+			command:   "today",
+			args:      []string{"--lat", "40", "--lon", "-74", "--units", "--help"},
+			wantErr:   true,
+			errString: "units must be 'metric' or 'imperial'",
+		},
+		{
+			name:      "lat value help token stays a value",
+			command:   "today",
+			args:      []string{"--lat", "-h", "--lon", "-74"},
+			wantErr:   true,
+			errString: "invalid lat value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Parse(tt.command, tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if err == nil || err.Error() != tt.errString {
+					t.Fatalf("Parse() error = %v, want %q", err, tt.errString)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("Parse() returned nil config")
+			}
+			if got.Command != tt.want.Command {
+				t.Fatalf("Parse() Command = %v, want %v", got.Command, tt.want.Command)
+			}
+			if got.Lat != tt.want.Lat {
+				t.Fatalf("Parse() Lat = %v, want %v", got.Lat, tt.want.Lat)
+			}
+			if got.Lon != tt.want.Lon {
+				t.Fatalf("Parse() Lon = %v, want %v", got.Lon, tt.want.Lon)
+			}
+			if got.Units != tt.want.Units {
+				t.Fatalf("Parse() Units = %v, want %v", got.Units, tt.want.Units)
+			}
+			if got.Format != tt.want.Format {
+				t.Fatalf("Parse() Format = %v, want %v", got.Format, tt.want.Format)
+			}
+			if got.DateStr != tt.want.DateStr {
+				t.Fatalf("Parse() DateStr = %v, want %v", got.DateStr, tt.want.DateStr)
+			}
+		})
+	}
+}
