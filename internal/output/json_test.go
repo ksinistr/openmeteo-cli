@@ -785,7 +785,7 @@ func TestWriter_WriteError(t *testing.T) {
 	w.SetError(&errBuf)
 
 	// Write an error
-	w.WriteError(fmt.Errorf("test error"))
+	_ = w.WriteError(fmt.Errorf("test error"))
 
 	// Verify error was written to stderr
 	if !strings.Contains(errBuf.String(), "test error") {
@@ -867,9 +867,9 @@ func TestWriter_WriteTOONSuccess(t *testing.T) {
 	}
 	outBuf.WriteString(toonData)
 
-	// Verify TOON output contains expected headers
-	if !strings.Contains(outBuf.String(), "# meta") {
-		t.Errorf("expected '# meta' in TOON output, got: %s", outBuf.String())
+	// Verify TOON output contains expected headers (toon-go format uses "meta:" not "# meta")
+	if !strings.Contains(outBuf.String(), "meta:") {
+		t.Errorf("expected 'meta:' in TOON output, got: %s", outBuf.String())
 	}
 
 	// Verify error buffer is empty
@@ -1007,6 +1007,50 @@ func TestWriter_StderrOnlyOnError(t *testing.T) {
 	// So stderr should be empty because WriteError is not called automatically
 	if errBuf.Len() > 0 {
 		t.Errorf("stderr should be empty when error is returned (not written), got: %s", errBuf.String())
+	}
+}
+
+func TestWriter_TypedNilTOON(t *testing.T) {
+	// Test that typed nil pointers return EncodingError instead of panicking
+	// This tests the fix for the Go nil interface gotcha where an interface
+	// containing a typed nil pointer is not equal to nil
+	var outBuf bytes.Buffer
+	w := NewWriter()
+	w.SetOutput(&outBuf)
+
+	// Test typed nil for TodayOutput
+	var typedNilToday *forecast.TodayOutput = nil
+	err := w.Write(typedNilToday, "toon")
+	if err == nil {
+		t.Error("expected error for typed nil TodayOutput, got nil")
+	}
+	if !IsEncodingError(err) {
+		t.Errorf("expected EncodingError for typed nil TodayOutput, got: %T", err)
+	}
+
+	// Test typed nil for DayOutput
+	var typedNilDay *forecast.DayOutput = nil
+	err = w.Write(typedNilDay, "toon")
+	if err == nil {
+		t.Error("expected error for typed nil DayOutput, got nil")
+	}
+	if !IsEncodingError(err) {
+		t.Errorf("expected EncodingError for typed nil DayOutput, got: %T", err)
+	}
+
+	// Test typed nil for WeekOutput
+	var typedNilWeek *forecast.WeekOutput = nil
+	err = w.Write(typedNilWeek, "toon")
+	if err == nil {
+		t.Error("expected error for typed nil WeekOutput, got nil")
+	}
+	if !IsEncodingError(err) {
+		t.Errorf("expected EncodingError for typed nil WeekOutput, got: %T", err)
+	}
+
+	// Verify nothing was written to output
+	if outBuf.Len() > 0 {
+		t.Errorf("expected empty output for typed nil, got: %s", outBuf.String())
 	}
 }
 

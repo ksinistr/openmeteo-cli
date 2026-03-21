@@ -3,8 +3,19 @@ package cli
 
 import (
 	"fmt"
-	"time"
+	"math"
+	"strconv"
 )
+
+// Config holds all configuration for a CLI command execution.
+type Config struct {
+	Command string
+	Lat     float64
+	Lon     float64
+	Units   string
+	Format  string
+	DateStr string
+}
 
 // ValidationError represents a validation error with exit code 3.
 type ValidationError struct {
@@ -24,23 +35,12 @@ func (e *InvalidArgumentError) Error() string {
 	return e.message
 }
 
-// Config holds all configuration for a CLI command execution.
-type Config struct {
-	Command string
-	Lat     float64
-	Lon     float64
-	Units   string
-	Format  string
-	Date    time.Time
-	DateStr string
-}
-
 // Parse parses command-line arguments for the given command.
 func Parse(command string, args []string) (*Config, error) {
 	// Default values
 	var lat, lon float64
 	var units, format, dateStr string
-	var hasLat, hasLon bool
+	var hasLat, hasLon, hasUnits, hasFormat, hasDate bool
 
 	units = "metric"
 	format = "toon"
@@ -48,30 +48,60 @@ func Parse(command string, args []string) (*Config, error) {
 	// Parse arguments manually
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--lat" && i+1 < len(args) {
-			var tmp float64
-			if _, err := fmt.Sscanf(args[i+1], "%f", &tmp); err != nil {
+			tmp, err := strconv.ParseFloat(args[i+1], 64)
+			if err != nil {
 				return nil, &InvalidArgumentError{message: "invalid lat value"}
+			}
+			if math.IsNaN(tmp) || math.IsInf(tmp, 0) {
+				return nil, &InvalidArgumentError{message: "lat must be a valid finite number"}
+			}
+			if hasLat {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --lat"}
 			}
 			lat = tmp
 			hasLat = true
 			i++
 		} else if args[i] == "--lon" && i+1 < len(args) {
-			var tmp float64
-			if _, err := fmt.Sscanf(args[i+1], "%f", &tmp); err != nil {
+			tmp, err := strconv.ParseFloat(args[i+1], 64)
+			if err != nil {
 				return nil, &InvalidArgumentError{message: "invalid lon value"}
+			}
+			if math.IsNaN(tmp) || math.IsInf(tmp, 0) {
+				return nil, &InvalidArgumentError{message: "lon must be a valid finite number"}
+			}
+			if hasLon {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --lon"}
 			}
 			lon = tmp
 			hasLon = true
 			i++
 		} else if args[i] == "--units" && i+1 < len(args) {
+			if hasUnits {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --units"}
+			}
 			units = args[i+1]
+			hasUnits = true
 			i++
 		} else if args[i] == "--format" && i+1 < len(args) {
+			if hasFormat {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --format"}
+			}
 			format = args[i+1]
+			hasFormat = true
 			i++
 		} else if args[i] == "--date" && i+1 < len(args) {
+			if hasDate {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --date"}
+			}
 			dateStr = args[i+1]
+			hasDate = true
 			i++
+		} else if len(args[i]) > 0 && args[i][0] == '-' {
+			// Unknown flag - return error to help catch typos
+			return nil, &InvalidArgumentError{message: fmt.Sprintf("unknown flag: %s", args[i])}
+		} else {
+			// Unexpected positional argument
+			return nil, &InvalidArgumentError{message: fmt.Sprintf("unexpected argument: %s", args[i])}
 		}
 	}
 
@@ -96,26 +126,12 @@ func Parse(command string, args []string) (*Config, error) {
 		return nil, &ValidationError{message: "format must be 'toon' or 'json'"}
 	}
 
-	if command == "day" && dateStr == "" {
-		return nil, &ValidationError{message: "date is required for day command"}
-	}
-
-	var date time.Time
-	if dateStr != "" {
-		var err error
-		date, err = time.Parse("2006-01-02", dateStr)
-		if err != nil {
-			return nil, &ValidationError{message: fmt.Sprintf("invalid date format, use YYYY-MM-DD: %v", err)}
-		}
-	}
-
 	cfg := &Config{
 		Command: command,
 		Lat:     lat,
 		Lon:     lon,
 		Units:   units,
 		Format:  format,
-		Date:    date,
 		DateStr: dateStr,
 	}
 

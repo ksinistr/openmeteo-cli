@@ -1,12 +1,18 @@
 package openmeteo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"time"
 )
+
+// Version is the current version of the openmeteo-cli tool.
+const Version = "1.0.0"
 
 // ErrUpstreamAPI is returned when the Open-Meteo API returns an error.
 var ErrUpstreamAPI = errors.New("upstream API error")
@@ -16,12 +22,21 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// RealHTTPClient is a simple HTTP client implementation.
-type RealHTTPClient struct{}
+// RealHTTPClient is a simple HTTP client implementation with timeout.
+type RealHTTPClient struct {
+	client *http.Client
+}
+
+// NewRealHTTPClient creates a RealHTTPClient with default timeout.
+func NewRealHTTPClient() *RealHTTPClient {
+	return &RealHTTPClient{
+		client: &http.Client{Timeout: 35 * time.Second},
+	}
+}
 
 // Do executes an HTTP request.
 func (c *RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return http.DefaultClient.Do(req)
+	return c.client.Do(req)
 }
 
 // APIResponse represents the Open-Meteo API response.
@@ -92,7 +107,7 @@ type Client struct {
 // NewClient creates a new Open-Meteo API client.
 func NewClient(httpClient HTTPClient) *Client {
 	if httpClient == nil {
-		httpClient = &RealHTTPClient{}
+		httpClient = NewRealHTTPClient()
 	}
 	return &Client{
 		httpClient: httpClient,
@@ -102,16 +117,31 @@ func NewClient(httpClient HTTPClient) *Client {
 
 // FetchForecast fetches weather forecast for the given coordinates.
 func (c *Client) FetchForecast(lat, lon float64, units, timezone string, forecastDays int) (*APIResponse, error) {
+	if forecastDays < 1 || forecastDays > 16 {
+		return nil, fmt.Errorf("forecastDays must be between 1 and 16, got %d", forecastDays)
+	}
+
+	// Validate timezone - "auto" is a special value for the Open-Meteo API
+	if timezone != "auto" {
+		if _, err := time.LoadLocation(timezone); err != nil {
+			return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
+		}
+	}
+
 	req, err := c.buildRequest(lat, lon, units, timezone, forecastDays)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch data: %w", err)
+		return nil, fmt.Errorf("%w: failed to fetch data: %v", ErrUpstreamAPI, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: API returned status %d", ErrUpstreamAPI, resp.StatusCode)
@@ -119,12 +149,12 @@ func (c *Client) FetchForecast(lat, lon float64, units, timezone string, forecas
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: failed to read response: %v", ErrUpstreamAPI, err)
 	}
 
 	var apiResp APIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("%w: failed to parse response: %v", ErrUpstreamAPI, err)
 	}
 
 	return &apiResp, nil
@@ -136,24 +166,25 @@ func (c *Client) buildRequest(lat, lon float64, units, timezone string, forecast
 	hourlyParams := "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,weather_code"
 	dailyParams := "weather_code,temperature_2m_min,temperature_2m_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset"
 
-	url := fmt.Sprintf(
-		"%s?latitude=%.4f&longitude=%.4f&current=%s&hourly=%s&daily=%s&timezone=%s&forecast_days=%d",
+	baseURL := fmt.Sprintf("%s?latitude=%.4f&longitude=%.4f&current=%s&hourly=%s&daily=%s&timezone=%s&forecast_days=%d",
 		c.baseURL, lat, lon,
 		currentParams, hourlyParams, dailyParams,
-		timezone,
+		url.QueryEscape(timezone),
 		forecastDays,
 	)
 
-	// Add units parameter if specified
-	if units != "" && units != "metric" {
-		url += fmt.Sprintf("&units=%s", units)
+	// Add units parameters if specified
+	// Open-Meteo uses separate parameters for different unit types
+	if units == "imperial" {
+		baseURL += "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"
 	}
+	// Default is metric (celsius, km/h, mm) - no parameters needed
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", baseURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "openmeteo-cli")
+	req.Header.Set("User-Agent", "openmeteo-cli/"+Version)
 	return req, nil
 }

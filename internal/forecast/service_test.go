@@ -2,6 +2,7 @@ package forecast
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -23,30 +24,35 @@ func TestService_mapHourly_DatetimeFiltering(t *testing.T) {
 		hourlyTime  []string
 		dateStr     string
 		expectedLen int
+		expectError bool
 	}{
 		{
 			name:        "filter_exact_match",
 			hourlyTime:  []string{"2026-03-21T00:00", "2026-03-21T12:00", "2026-03-21T23:00"},
 			dateStr:     "2026-03-21",
 			expectedLen: 3,
+			expectError: false,
 		},
 		{
 			name:        "filter_excludes_other_dates",
 			hourlyTime:  []string{"2026-03-20T23:00", "2026-03-21T00:00", "2026-03-21T12:00", "2026-03-22T00:00"},
 			dateStr:     "2026-03-21",
 			expectedLen: 2,
+			expectError: false,
 		},
 		{
-			name:        "filter_no_match",
+			name:        "filter_no_match_returns_error",
 			hourlyTime:  []string{"2026-03-20T00:00", "2026-03-20T12:00"},
 			dateStr:     "2026-03-21",
 			expectedLen: 0,
+			expectError: true,
 		},
 		{
-			name:        "filter_empty",
+			name:        "filter_empty_returns_error",
 			hourlyTime:  []string{},
 			dateStr:     "2026-03-21",
 			expectedLen: 0,
+			expectError: true,
 		},
 	}
 
@@ -66,7 +72,17 @@ func TestService_mapHourly_DatetimeFiltering(t *testing.T) {
 				WeatherCode:              make([]int, len(tt.hourlyTime)),
 			}
 
-			hours := svc.mapHourly(hourly, tt.dateStr, loc)
+			hours, err := svc.mapHourly(hourly, tt.dateStr, loc)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("mapHourly() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("mapHourly() returned unexpected error: %v", err)
+				return
+			}
 
 			if len(hours) != tt.expectedLen {
 				t.Errorf("Expected %d hours, got %d", tt.expectedLen, len(hours))
@@ -138,7 +154,10 @@ func TestService_mapHourly_TimezoneConversion(t *testing.T) {
 				WeatherCode:              []int{0},
 			}
 
-			hours := svc.mapHourly(hourly, tt.dateStr, loc)
+			hours, err := svc.mapHourly(hourly, tt.dateStr, loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if len(hours) != tt.count {
 				t.Fatalf("Expected %d hour(s), got %d", tt.count, len(hours))
@@ -177,7 +196,10 @@ func TestService_mapCurrent(t *testing.T) {
 		WeatherCode:              0,
 	}
 
-	result := svc.mapCurrent(current, loc)
+	result, err := svc.mapCurrent(current, loc)
+	if err != nil {
+		t.Fatalf("mapCurrent() returned error: %v", err)
+	}
 
 	tests := []struct {
 		field string
@@ -251,7 +273,10 @@ func TestService_mapHourly_UnknownWeatherCode(t *testing.T) {
 		WeatherCode:              []int{999},
 	}
 
-	hours := svc.mapHourly(hourly, "2026-03-21", loc)
+	hours, err := svc.mapHourly(hourly, "2026-03-21", loc)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
 
 	if len(hours) != 1 {
 		t.Fatalf("Expected 1 hour, got %d", len(hours))
@@ -313,7 +338,10 @@ func TestService_mapHourly_DSTHandling(t *testing.T) {
 				WeatherCode:              make([]int, len(tt.hourlyTime)),
 			}
 
-			hours := svc.mapHourly(hourly, tt.date, loc)
+			hours, err := svc.mapHourly(hourly, tt.date, loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if len(hours) != tt.expectedLen {
 				t.Errorf("Expected %d hours, got %d", tt.expectedLen, len(hours))
@@ -350,7 +378,10 @@ func TestService_mapDaily(t *testing.T) {
 		Sunset:                      []string{"2026-03-21T18:00"},
 	}
 
-	result := svc.mapDaily(daily, 0, loc)
+	result, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
 
 	tests := []struct {
 		field string
@@ -362,8 +393,8 @@ func TestService_mapDaily(t *testing.T) {
 		{"TempMax", 25.0},
 		{"WindSpeedMax", 10.0},
 		{"UVIndexMax", 5.0},
-		{"Sunrise", "2026-03-21T06:00"},
-		{"Sunset", "2026-03-21T18:00"},
+		{"Sunrise", "2026-03-21T06:00:00Z"},
+		{"Sunset", "2026-03-21T18:00:00Z"},
 	}
 
 	for _, tt := range tests {
@@ -406,6 +437,45 @@ func TestService_mapDaily(t *testing.T) {
 	}
 }
 
+// TestService_mapDaily_TimezoneOffset tests sunrise/sunset with timezone offset.
+func TestService_mapDaily_TimezoneOffset(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	// Use a non-UTC timezone to test timezone handling
+	loc, _ := time.LoadLocation("Europe/Berlin")
+
+	daily := openmeteo.Daily{
+		Time:                        []string{"2026-03-21"},
+		WeatherCode:                 []int{0},
+		Temperature2MMin:            []float64{15.0},
+		Temperature2MMax:            []float64{25.0},
+		PrecipitationSum:            []float64{0.0},
+		PrecipitationProbabilityMax: []int{10},
+		WindSpeed10MMax:             []float64{10.0},
+		WindGusts10MMax:             []float64{15.0},
+		UVIndexMax:                  []float64{5.0},
+		// RFC3339 format with timezone offset
+		Sunrise: []string{"2026-03-21T06:30+01:00"},
+		Sunset:  []string{"2026-03-21T18:45+01:00"},
+	}
+
+	result, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
+
+	// The parsed time should be converted to UTC for consistent output
+	// Format should be RFC3339
+	if len(result.Sunrise) < 16 || result.Sunrise[10] != 'T' {
+		t.Errorf("Sunrise should be in RFC3339 format, got %q", result.Sunrise)
+	}
+	if len(result.Sunset) < 16 || result.Sunset[10] != 'T' {
+		t.Errorf("Sunset should be in RFC3339 format, got %q", result.Sunset)
+	}
+}
+
 // TestService_mapDaily_MultipleDays tests mapping multiple days.
 func TestService_mapDaily_MultipleDays(t *testing.T) {
 	mapper := weathercode.NewMapper()
@@ -440,7 +510,10 @@ func TestService_mapDaily_MultipleDays(t *testing.T) {
 
 	for _, tt := range days {
 		t.Run(tt.date, func(t *testing.T) {
-			result := svc.mapDaily(daily, tt.idx, loc)
+			result, err := svc.mapDaily(daily, tt.idx, loc)
+			if err != nil {
+				t.Fatalf("mapDaily() returned error: %v", err)
+			}
 
 			if result.Date != tt.date {
 				t.Errorf("Date = %q, want %q", result.Date, tt.date)
@@ -471,8 +544,9 @@ func TestService_Today_Units(t *testing.T) {
 		t.Run("units_"+tt.units, func(t *testing.T) {
 			result, err := svc.Today(40.0, -74.0, tt.units)
 			if err != nil {
-				// Expected - network call will fail
-				// We just want to verify the units are set correctly in the output
+				// Expected - network call will fail, we're just verifying units structure
+				_ = err
+				return
 			}
 
 			// Verify the units structure would be correct
@@ -516,7 +590,10 @@ func TestService_Today_FullDay(t *testing.T) {
 		WeatherCode:              make([]int, 24),
 	}
 
-	result := svc.mapHourly(hourly, "2026-03-21", time.UTC)
+	result, err := svc.mapHourly(hourly, "2026-03-21", time.UTC)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
 
 	if len(result) != 24 {
 		t.Errorf("Expected 24 hours, got %d", len(result))
@@ -607,7 +684,10 @@ func TestService_Today_HourTimeFormat(t *testing.T) {
 				WeatherCode:              make([]int, len(tt.hourlyTime)),
 			}
 
-			hours := svc.mapHourly(hourly, "2026-03-21", loc)
+			hours, err := svc.mapHourly(hourly, "2026-03-21", loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if len(hours) != len(tt.expected) {
 				t.Errorf("Expected %d hours, got %d", len(tt.expected), len(hours))
@@ -624,6 +704,8 @@ func TestService_Today_HourTimeFormat(t *testing.T) {
 }
 
 // TestService_Today_EmptyHourlyData tests handling of empty hourly data.
+// When the hourly payload is completely empty, this indicates an upstream
+// data inconsistency and should return an error.
 func TestService_Today_EmptyHourlyData(t *testing.T) {
 	mapper := weathercode.NewMapper()
 	client := openmeteo.NewClient(nil)
@@ -645,16 +727,19 @@ func TestService_Today_EmptyHourlyData(t *testing.T) {
 		WeatherCode:              []int{},
 	}
 
-	hours := svc.mapHourly(hourly, "2026-03-21", loc)
-
-	// Empty slice is valid - nil and empty slice are both acceptable
-	// but we should verify the function handles it gracefully
-	if len(hours) != 0 {
-		t.Errorf("Expected 0 hours, got %d", len(hours))
+	hours, err := svc.mapHourly(hourly, "2026-03-21", loc)
+	// Empty hourly payload should return an error
+	if err == nil {
+		t.Fatalf("mapHourly() expected error for empty hourly payload, got nil")
+	}
+	if hours != nil {
+		t.Errorf("Expected nil hours on error, got %v", hours)
 	}
 }
 
 // TestService_Today_MissingDateInHourly tests behavior when date is not found in hourly data.
+// When the requested date is not in the hourly payload, this indicates an upstream
+// data inconsistency and should return an error.
 func TestService_Today_MissingDateInHourly(t *testing.T) {
 	mapper := weathercode.NewMapper()
 	client := openmeteo.NewClient(nil)
@@ -676,10 +761,13 @@ func TestService_Today_MissingDateInHourly(t *testing.T) {
 		WeatherCode:              []int{45, 0, 45},
 	}
 
-	hours := svc.mapHourly(hourly, "2026-03-22", loc)
-
-	if len(hours) != 0 {
-		t.Errorf("Expected 0 hours when date not found, got %d", len(hours))
+	hours, err := svc.mapHourly(hourly, "2026-03-22", loc)
+	// Missing date in hourly payload should return an error
+	if err == nil {
+		t.Fatalf("mapHourly() expected error when date not found, got nil")
+	}
+	if hours != nil {
+		t.Errorf("Expected nil hours on error, got %v", hours)
 	}
 }
 
@@ -830,7 +918,10 @@ func TestService_mapHourly_MidnightBoundary(t *testing.T) {
 				WeatherCode:              make([]int, len(tt.hourlyTime)),
 			}
 
-			hours := svc.mapHourly(hourly, "2026-03-21", loc)
+			hours, err := svc.mapHourly(hourly, "2026-03-21", loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if len(hours) < tt.expectedMin {
 				t.Errorf("Expected at least %d hours for %s, got %d", tt.expectedMin, tt.name, len(hours))
@@ -907,8 +998,14 @@ func TestService_Day_Success(t *testing.T) {
 
 			loc, _ := time.LoadLocation("UTC")
 
-			dayResult := svc.mapDaily(daily, 0, loc)
-			hoursResult := svc.mapHourly(hourly, tt.dailyDate, loc)
+			dayResult, err := svc.mapDaily(daily, 0, loc)
+			if err != nil {
+				t.Fatalf("mapDaily() returned error: %v", err)
+			}
+			hoursResult, err := svc.mapHourly(hourly, tt.dailyDate, loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if len(hoursResult) != tt.expectedQty {
 				t.Errorf("Expected %d hours, got %d", tt.expectedQty, len(hoursResult))
@@ -996,16 +1093,23 @@ func TestService_Day_MissingDailyRow(t *testing.T) {
 	}
 
 	// Request date not in daily data
-	result := svc.mapDaily(daily, 0, loc)
+	result, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
 
 	if result.Date != "2026-03-21" {
 		t.Errorf("Date = %q, want %q", result.Date, "2026-03-21")
 	}
 
-	// For hourly data at a different date - should return empty
-	hours := svc.mapHourly(hourly, "2026-03-23", loc)
-	if len(hours) != 0 {
-		t.Errorf("Expected 0 hours for missing date, got %d", len(hours))
+	// For hourly data at a different date - should return error
+	hours, err := svc.mapHourly(hourly, "2026-03-23", loc)
+	// Missing date in hourly payload should return an error
+	if err == nil {
+		t.Fatalf("mapHourly() expected error when date not found, got nil")
+	}
+	if hours != nil {
+		t.Errorf("Expected nil hours on error, got %v", hours)
 	}
 }
 
@@ -1067,8 +1171,14 @@ func TestService_Day_DSTTransition(t *testing.T) {
 				WeatherCode:              make([]int, len(tt.hourlyTimes)),
 			}
 
-			dayResult := svc.mapDaily(daily, 0, loc)
-			hoursResult := svc.mapHourly(hourly, tt.date, loc)
+			dayResult, err := svc.mapDaily(daily, 0, loc)
+			if err != nil {
+				t.Fatalf("mapDaily() returned error: %v", err)
+			}
+			hoursResult, err := svc.mapHourly(hourly, tt.date, loc)
+			if err != nil {
+				t.Fatalf("mapHourly() returned error: %v", err)
+			}
 
 			if dayResult.Date != tt.date {
 				t.Errorf("Day.Date = %q, want %q", dayResult.Date, tt.date)
@@ -1130,8 +1240,14 @@ func TestService_Day_HourTimeFormat(t *testing.T) {
 		WeatherCode:              []int{45, 1, 1, 1, 2},
 	}
 
-	dayResult := svc.mapDaily(daily, 0, loc)
-	hoursResult := svc.mapHourly(hourly, "2026-03-22", loc)
+	dayResult, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
+	hoursResult, err := svc.mapHourly(hourly, "2026-03-22", loc)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
 
 	if dayResult.Date != "2026-03-22" {
 		t.Errorf("Day.Date = %q, want %q", dayResult.Date, "2026-03-22")
@@ -1155,12 +1271,12 @@ func TestService_Day_HourTimeFormat(t *testing.T) {
 		}
 	}
 
-	// Verify sunrise/sunset are full datetime (not HH:MM)
-	if len(dayResult.Sunrise) != 16 || dayResult.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM, got %q", dayResult.Sunrise)
+	// Verify sunrise/sunset are full datetime
+	if len(dayResult.Sunrise) != 20 || dayResult.Sunrise[10] != 'T' {
+		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunrise)
 	}
-	if len(dayResult.Sunset) != 16 || dayResult.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM, got %q", dayResult.Sunset)
+	if len(dayResult.Sunset) != 20 || dayResult.Sunset[10] != 'T' {
+		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunset)
 	}
 }
 
@@ -1200,8 +1316,14 @@ func TestService_Day_ImperialUnits(t *testing.T) {
 		WeatherCode:              []int{0},
 	}
 
-	hours := svc.mapHourly(hourly, "2026-03-22", loc)
-	dayResult := svc.mapDaily(daily, 0, loc)
+	hours, err := svc.mapHourly(hourly, "2026-03-22", loc)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
+	dayResult, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
 
 	if len(hours) != 1 {
 		t.Fatalf("Expected 1 hour, got %d", len(hours))
@@ -1260,7 +1382,10 @@ func TestService_Day_WeatherCodeMapping(t *testing.T) {
 				Sunset:                      []string{"2026-03-22T18:00"},
 			}
 
-			result := svc.mapDaily(daily, 0, loc)
+			result, err := svc.mapDaily(daily, 0, loc)
+			if err != nil {
+				t.Fatalf("mapDaily() returned error: %v", err)
+			}
 
 			if result.Weather != tt.description {
 				t.Errorf("Weather code %d = %q, want %q", tt.code, result.Weather, tt.description)
@@ -1292,7 +1417,10 @@ func TestService_Day_MismatchedHourlyData(t *testing.T) {
 		WeatherCode:              []int{0, 1},
 	}
 
-	hours := svc.mapHourly(hourly, "2026-03-22", loc)
+	hours, err := svc.mapHourly(hourly, "2026-03-22", loc)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
 
 	if len(hours) != 2 {
 		t.Errorf("Expected 2 hours with matching data, got %d", len(hours))
@@ -1349,7 +1477,10 @@ func TestService_Day_MidnightBoundary(t *testing.T) {
 	}
 
 	// This should only include hours from 2026-03-22
-	hours := svc.mapHourly(hourly, "2026-03-22", loc)
+	hours, err := svc.mapHourly(hourly, "2026-03-22", loc)
+	if err != nil {
+		t.Fatalf("mapHourly() returned error: %v", err)
+	}
 
 	// First hourly at 23:30 on 03-21 should NOT be included
 	// 5 entries should be included (00:00, 01:00, 12:00, 23:00, 23:59)
@@ -1363,7 +1494,10 @@ func TestService_Day_MidnightBoundary(t *testing.T) {
 		t.Errorf("First hour should be 00:00, got %q", hours[0].Time)
 	}
 
-	dayResult := svc.mapDaily(daily, 0, loc)
+	dayResult, err := svc.mapDaily(daily, 0, loc)
+	if err != nil {
+		t.Fatalf("mapDaily() returned error: %v", err)
+	}
 	if dayResult.Date != "2026-03-22" {
 		t.Errorf("Day.Date = %q, want %q", dayResult.Date, "2026-03-22")
 	}
@@ -1409,7 +1543,10 @@ func TestService_Week_SuccessfulResponse(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
 	if len(days) != 7 {
 		t.Errorf("Expected 7 days, got %d", len(days))
@@ -1439,6 +1576,7 @@ func TestService_Week_SuccessfulResponse(t *testing.T) {
 }
 
 // TestService_Week_ShortDailyArray tests behavior when upstream daily data has fewer than 7 days.
+// This should return an error since the contract specifies exactly 7 days must be returned.
 func TestService_Week_ShortDailyArray(t *testing.T) {
 	mapper := weathercode.NewMapper()
 	client := openmeteo.NewClient(nil)
@@ -1461,11 +1599,17 @@ func TestService_Week_ShortDailyArray(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
-
-	// Should only return 3 days (the actual data available)
-	if len(days) != 3 {
-		t.Errorf("Expected 3 days (limited by available data), got %d", len(days))
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	// Should return an error since we require exactly 7 days
+	if err == nil {
+		t.Error("mapWeekDaily() should return error when daily array has fewer than 7 entries")
+	}
+	if days != nil {
+		t.Errorf("Expected nil days on error, got %d days", len(days))
+	}
+	// Verify the error wraps ErrUpstreamAPI
+	if err != nil && !errors.Is(err, openmeteo.ErrUpstreamAPI) {
+		t.Errorf("Expected error to wrap ErrUpstreamAPI, got: %v", err)
 	}
 }
 
@@ -1491,7 +1635,10 @@ func TestService_Week_ExactSevenDays(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
 	if len(days) != 7 {
 		t.Errorf("Expected exactly 7 days, got %d", len(days))
@@ -1529,7 +1676,10 @@ func TestService_Week_TimezoneBoundaries(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
 	if len(days) != 7 {
 		t.Errorf("Expected 7 days with timezone, got %d", len(days))
@@ -1566,7 +1716,10 @@ func TestService_Week_WeatherCodeMapping(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
 	// Check a few weather mappings
 	if days[0].Weather != "Clear sky" {
@@ -1602,16 +1755,21 @@ func TestService_Week_SunsetSunriseFormat(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
-	// Verify sunrise/sunset have full datetime format (YYYY-MM-DDTHH:MM)
+	// Verify sunrise/sunset have full datetime format (YYYY-MM-DDTHH:MM:SSZ) - RFC3339
 	expectedDates := []string{"2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28"}
 	for i := 0; i < 7; i++ {
-		if len(days[i].Sunrise) != 16 {
-			t.Errorf("Day[%d].Sunrise = %q, expected 16 chars (YYYY-MM-DDTHH:MM)", i, days[i].Sunrise)
+		if len(days[i].Sunrise) != 20 {
+			t.Errorf("Day[%d].Sunrise = %q, expected 20 chars (YYYY-MM-DDTHH:MM:SSZ)", i, days[i].Sunrise)
+			continue
 		}
-		if len(days[i].Sunset) != 16 {
-			t.Errorf("Day[%d].Sunset = %q, expected 16 chars (YYYY-MM-DDTHH:MM)", i, days[i].Sunset)
+		if len(days[i].Sunset) != 20 {
+			t.Errorf("Day[%d].Sunset = %q, expected 20 chars (YYYY-MM-DDTHH:MM:SSZ)", i, days[i].Sunset)
+			continue
 		}
 		// Verify date matches expected
 		if days[i].Sunrise[:10] != expectedDates[i] {
@@ -1642,7 +1800,10 @@ func TestService_Week_ImplicitUnits(t *testing.T) {
 		Sunset:                      []string{"2026-03-22T18:00", "2026-03-23T18:01", "2026-03-24T18:02", "2026-03-25T18:03", "2026-03-26T18:04", "2026-03-27T18:05", "2026-03-28T18:06"},
 	}
 
-	days := svc.mapWeekDaily(daily, 7, loc)
+	days, err := svc.mapWeekDaily(daily, 7, loc)
+	if err != nil {
+		t.Fatalf("mapWeekDaily() returned error: %v", err)
+	}
 
 	// Verify all numeric fields are present
 	for i := 0; i < 7; i++ {

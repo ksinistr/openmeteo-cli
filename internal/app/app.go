@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"openmeteo-cli/internal/cli"
 	"openmeteo-cli/internal/forecast"
@@ -23,6 +24,14 @@ func Run(args []string) int {
 	command := args[0]
 	commandArgs := args[1:]
 
+	// Validate command before doing any other parsing
+	validCommands := map[string]bool{"today": true, "day": true, "week": true}
+	if !validCommands[command] {
+		fmt.Fprintf(os.Stderr, "Error: unknown command %q\n", command)
+		fmt.Fprintln(os.Stderr, "Valid commands: today, day, week")
+		return 2
+	}
+
 	cfg, err := cli.Parse(command, commandArgs)
 	if err != nil {
 		// Check for validation errors (exit 3) vs invalid argument errors (exit 2)
@@ -41,8 +50,51 @@ func Run(args []string) int {
 		return 2
 	}
 
+	// Command-specific validation after parsing
+	// First check if --date is allowed for the command (before validating format)
+	if command != "day" && cfg.DateStr != "" {
+		fmt.Fprintln(os.Stderr, "Error: --date flag is only valid for day command")
+		return 3
+	}
+	if command == "day" && cfg.DateStr == "" {
+		fmt.Fprintln(os.Stderr, "Error: date is required for day command")
+		return 3
+	}
+
+	// Now validate date format (only after checking --date is allowed)
+	var date time.Time
+	if cfg.DateStr != "" {
+		var err error
+		date, err = time.Parse("2006-01-02", cfg.DateStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid date format, use YYYY-MM-DD: %v\n", err)
+			return 3
+		}
+
+		// Verify the date string round-trips correctly (catches invalid dates like Feb 31)
+		if date.Format("2006-01-02") != cfg.DateStr {
+			fmt.Fprintln(os.Stderr, "Error: invalid date (not a valid calendar date)")
+			return 3
+		}
+
+		// Validate date is within forecast range (today through 16 days from today)
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		minDate := today
+		maxDate := today.AddDate(0, 0, 16)
+		if date.Before(minDate) || date.After(maxDate) {
+			fmt.Fprintln(os.Stderr, "Error: date must be between today and 16 days from today")
+			return 3
+		}
+	}
+
+	// Use real HTTP client
+	return runWithClient(cfg, date, command, openmeteo.NewRealHTTPClient())
+}
+
+// runWithClient executes the command with the given HTTP client.
+// This is primarily used for testing with mock HTTP clients.
+func runWithClient(cfg *cli.Config, date time.Time, command string, httpClient openmeteo.HTTPClient) int {
 	weatherMapper := weathercode.NewMapper()
-	httpClient := &openmeteo.RealHTTPClient{}
 	omClient := openmeteo.NewClient(httpClient)
 	fcService := forecast.NewService(omClient, weatherMapper)
 
@@ -52,13 +104,9 @@ func Run(args []string) int {
 	case "today":
 		result, errResult = fcService.Today(cfg.Lat, cfg.Lon, cfg.Units)
 	case "day":
-		result, errResult = fcService.Day(cfg.Lat, cfg.Lon, cfg.Date, cfg.Units)
+		result, errResult = fcService.Day(cfg.Lat, cfg.Lon, date, cfg.Units)
 	case "week":
 		result, errResult = fcService.Week(cfg.Lat, cfg.Lon, cfg.Units)
-	default:
-		fmt.Fprintf(os.Stderr, "Error: unknown command %q\n", command)
-		fmt.Fprintln(os.Stderr, "Valid commands: today, day, week")
-		return 2
 	}
 
 	if errResult != nil {
@@ -75,7 +123,7 @@ func Run(args []string) int {
 }
 
 func handleError(err error) int {
-	if err == forecast.ErrDateUnavailable {
+	if errors.Is(err, forecast.ErrDateUnavailable) {
 		return 5
 	}
 	return 6
@@ -84,9 +132,7 @@ func handleError(err error) int {
 func writeOutput(format string, data interface{}) int {
 	w := output.NewWriter()
 	if err := w.Write(data, format); err != nil {
-		if output.IsEncodingError(err) {
-			return 6
-		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 6
 	}
 	return 0

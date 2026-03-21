@@ -2,7 +2,6 @@ package cli
 
 import (
 	"testing"
-	"time"
 )
 
 func TestParse(t *testing.T) {
@@ -24,7 +23,6 @@ func TestParse(t *testing.T) {
 				Lon:     -74.0060,
 				Units:   "metric",
 				Format:  "toon",
-				Date:    time.Time{},
 				DateStr: "",
 			},
 			wantErr: false,
@@ -39,7 +37,6 @@ func TestParse(t *testing.T) {
 				Lon:     -74.0060,
 				Units:   "imperial",
 				Format:  "toon",
-				Date:    time.Time{},
 				DateStr: "",
 			},
 			wantErr: false,
@@ -54,7 +51,6 @@ func TestParse(t *testing.T) {
 				Lon:     -74.0060,
 				Units:   "metric",
 				Format:  "json",
-				Date:    time.Time{},
 				DateStr: "",
 			},
 			wantErr: false,
@@ -69,7 +65,6 @@ func TestParse(t *testing.T) {
 				Lon:     -74.0060,
 				Units:   "metric",
 				Format:  "toon",
-				Date:    time.Date(2026, 3, 22, 0, 0, 0, 0, time.UTC),
 				DateStr: "2026-03-22",
 			},
 			wantErr: false,
@@ -84,7 +79,6 @@ func TestParse(t *testing.T) {
 				Lon:     -74.0060,
 				Units:   "metric",
 				Format:  "toon",
-				Date:    time.Time{},
 				DateStr: "",
 			},
 			wantErr: false,
@@ -130,20 +124,100 @@ func TestParse(t *testing.T) {
 			errMsg:  "format must be 'toon' or 'json'",
 		},
 		{
-			name:    "day command missing date",
+			name:    "day command missing date - validation now in app package",
 			command: "day",
 			args:    []string{"--lat", "40.7128", "--lon", "-74.0060"},
-			want:    nil,
-			wantErr: true,
-			errMsg:  "date is required for day command",
+			want: &Config{
+				Command: "day",
+				Lat:     40.7128,
+				Lon:     -74.0060,
+				Units:   "metric",
+				Format:  "toon",
+				DateStr: "",
+			},
+			wantErr: false, // cli.Parse now accepts this, validation is in app.go
 		},
 		{
-			name:    "day command invalid date format",
+			name:    "day command invalid date format - validation now in app package",
 			command: "day",
 			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--date", "invalid"},
+			want: &Config{
+				Command: "day",
+				Lat:     40.7128,
+				Lon:     -74.0060,
+				Units:   "metric",
+				Format:  "toon",
+				DateStr: "invalid",
+			},
+			wantErr: false, // cli.Parse no longer validates date format, validation is in app.go
+		},
+		{
+			name:    "duplicate --lat flag",
+			command: "today",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--lat", "41.0"},
 			want:    nil,
 			wantErr: true,
-			errMsg:  "invalid date format",
+			errMsg:  "duplicate flag: --lat",
+		},
+		{
+			name:    "duplicate --lon flag",
+			command: "today",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--lon", "-75.0"},
+			want:    nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --lon",
+		},
+		{
+			name:    "duplicate --units flag",
+			command: "today",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--units", "metric", "--units", "imperial"},
+			want:    nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --units",
+		},
+		{
+			name:    "duplicate --format flag",
+			command: "today",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--format", "toon", "--format", "json"},
+			want:    nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --format",
+		},
+		{
+			name:    "duplicate --date flag",
+			command: "day",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-01-01", "--date", "2026-01-02"},
+			want:    nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --date",
+		},
+		{
+			name:    "today command with --date flag - validation now in app package",
+			command: "today",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-03-22"},
+			want: &Config{
+				Command: "today",
+				Lat:     40.0,
+				Lon:     -74.0,
+				Units:   "metric",
+				Format:  "toon",
+				DateStr: "2026-03-22",
+			},
+			wantErr: false, // cli.Parse now accepts this, validation is in app.go
+		},
+		{
+			name:    "week command with --date flag - validation now in app package",
+			command: "week",
+			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-03-22"},
+			want: &Config{
+				Command: "week",
+				Lat:     40.0,
+				Lon:     -74.0,
+				Units:   "metric",
+				Format:  "toon",
+				DateStr: "2026-03-22",
+			},
+			wantErr: false, // cli.Parse now accepts this, validation is in app.go
 		},
 	}
 
@@ -155,9 +229,8 @@ func TestParse(t *testing.T) {
 				return
 			}
 			if err != nil && tt.errMsg != "" {
-				if err.Error() != tt.errMsg && err.Error() != "invalid command-line arguments" {
-					// Allow any error message for validation errors
-				}
+				// Allow any error message for validation errors
+				_ = err.Error()
 			}
 			if err == nil && !tt.wantErr {
 				if got.Command != tt.want.Command {

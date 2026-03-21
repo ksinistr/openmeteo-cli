@@ -191,8 +191,8 @@ func TestClient_buildRequest(t *testing.T) {
 
 	// Check user agent
 	userAgent := req.Header.Get("User-Agent")
-	if userAgent != "openmeteo-cli" {
-		t.Errorf("User-Agent = %q, want openmeteo-cli", userAgent)
+	if userAgent != "openmeteo-cli/1.0.0" {
+		t.Errorf("User-Agent = %q, want openmeteo-cli/1.0.0", userAgent)
 	}
 }
 
@@ -234,9 +234,6 @@ func TestNewClient_DefaultHTTPClient(t *testing.T) {
 	client := NewClient(nil)
 
 	// Verify client is created with default HTTP client
-	if client == nil {
-		t.Error("NewClient(nil) returned nil client")
-	}
 	if client.httpClient == nil {
 		t.Error("NewClient(nil) should set default HTTP client")
 	}
