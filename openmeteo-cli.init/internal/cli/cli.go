@@ -6,6 +6,24 @@ import (
 	"time"
 )
 
+// ValidationError represents a validation error with exit code 3.
+type ValidationError struct {
+	message string
+}
+
+func (e *ValidationError) Error() string {
+	return e.message
+}
+
+// InvalidArgumentError represents an invalid argument error with exit code 2.
+type InvalidArgumentError struct {
+	message string
+}
+
+func (e *InvalidArgumentError) Error() string {
+	return e.message
+}
+
 // Config holds all configuration for a CLI command execution.
 type Config struct {
 	Command string
@@ -32,7 +50,7 @@ func Parse(command string, args []string) (*Config, error) {
 		if args[i] == "--lat" && i+1 < len(args) {
 			var tmp float64
 			if _, err := fmt.Sscanf(args[i+1], "%f", &tmp); err != nil {
-				return nil, fmt.Errorf("invalid lat value")
+				return nil, &InvalidArgumentError{message: "invalid lat value"}
 			}
 			lat = tmp
 			hasLat = true
@@ -40,7 +58,7 @@ func Parse(command string, args []string) (*Config, error) {
 		} else if args[i] == "--lon" && i+1 < len(args) {
 			var tmp float64
 			if _, err := fmt.Sscanf(args[i+1], "%f", &tmp); err != nil {
-				return nil, fmt.Errorf("invalid lon value")
+				return nil, &InvalidArgumentError{message: "invalid lon value"}
 			}
 			lon = tmp
 			hasLon = true
@@ -59,27 +77,27 @@ func Parse(command string, args []string) (*Config, error) {
 
 	// Validate required parameters
 	if !hasLat || !hasLon {
-		return nil, fmt.Errorf("lat and lon are required")
+		return nil, &InvalidArgumentError{message: "lat and lon are required"}
 	}
 
 	if lat < -90 || lat > 90 {
-		return nil, fmt.Errorf("latitude must be between -90 and 90")
+		return nil, &ValidationError{message: "latitude must be between -90 and 90"}
 	}
 
 	if lon < -180 || lon > 180 {
-		return nil, fmt.Errorf("longitude must be between -180 and 180")
+		return nil, &ValidationError{message: "longitude must be between -180 and 180"}
 	}
 
 	if units != "metric" && units != "imperial" {
-		return nil, fmt.Errorf("units must be 'metric' or 'imperial'")
+		return nil, &ValidationError{message: "units must be 'metric' or 'imperial'"}
 	}
 
 	if format != "toon" && format != "json" {
-		return nil, fmt.Errorf("format must be 'toon' or 'json'")
+		return nil, &ValidationError{message: "format must be 'toon' or 'json'"}
 	}
 
 	if command == "day" && dateStr == "" {
-		return nil, fmt.Errorf("date is required for day command")
+		return nil, &ValidationError{message: "date is required for day command"}
 	}
 
 	var date time.Time
@@ -87,7 +105,7 @@ func Parse(command string, args []string) (*Config, error) {
 		var err error
 		date, err = time.Parse("2006-01-02", dateStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid date format, use YYYY-MM-DD: %w", err)
+			return nil, &ValidationError{message: fmt.Sprintf("invalid date format, use YYYY-MM-DD: %v", err)}
 		}
 	}
 

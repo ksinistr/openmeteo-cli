@@ -4,6 +4,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -26,6 +27,13 @@ func Run(args []string) int {
 
 	cfg, err := cli.Parse(command, commandArgs)
 	if err != nil {
+		// Check for validation errors (exit 3) vs invalid argument errors (exit 2)
+		var ve *cli.ValidationError
+		var ia *cli.InvalidArgumentError
+		if errors.As(err, &ve) || errors.As(err, &ia) {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 3
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 2
 	}
