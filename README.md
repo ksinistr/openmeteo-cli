@@ -1,31 +1,49 @@
 # openmeteo-cli
 
-A command-line tool for fetching weather forecasts from Open-Meteo.
+A command-line weather tool built especially for AI agents.
 
 ## Overview
 
-`openmeteo-cli` fetches weather forecast data from the Open-Meteo API and outputs it in human-readable (TOON) or machine-readable (JSON) formats.
+`openmeteo-cli` fetches weather forecast data from the Open-Meteo API and outputs it in human-readable `toon` or machine-readable `json` formats.
+
+The CLI is designed especially for AI agents and automation workflows. `toon` is the default because it stays structured while using fewer tokens than heavier text or JSON output in normal agent conversations.
+
+## Installation For Humans And Agents
+
+Give this install document to Clawbot or another coding agent:
+
+```text
+Install and configure openmeteo-cli by following the instructions here:
+https://raw.githubusercontent.com/ksinistr/openmeteo-cli/main/install.md
+```
 
 ## Installation
+
+### Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ksinistr/openmeteo-cli/main/install.sh | bash
+```
+
+The installer downloads the latest GitHub Release binary into `~/.local/bin/openmeteo-cli`.
+
+### Clawbot Skill
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ksinistr/openmeteo-cli/main/skills/openmeteo-cli/install.sh | bash -s -- /path/to/clawbot/skills
+```
+
+See [install.md](./install.md) for the full install flow, custom install paths, version-pinned installs, and Clawbot setup details.
 
 ### From Source
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone https://github.com/ksinistr/openmeteo-cli.git
 cd openmeteo-cli
-
-# Build the binary
 make build
-
-# The binary will be created at bin/openmeteo-cli
 ```
 
-### Using go install
-
-```bash
-go install openmeteo-cli@latest
-```
+The binary will be created at `bin/openmeteo-cli`.
 
 ## Commands
 
@@ -113,7 +131,7 @@ openmeteo-cli day --lat 34.0522 --lon -118.2437 --date 2026-04-15
 ## Output Format Notes
 
 ### TOON Format (default)
-TOON is a compact, human-readable text format designed for structured data. Key features:
+TOON is a compact, human-readable text format designed for structured data and low token usage in agent workflows. Key features:
 - Uses `#` prefix for section headers
 - Key-value pairs on separate lines with `  ` (two-space) indentation
 - Numeric values remain numeric (not quoted strings)

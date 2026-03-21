@@ -39,6 +39,7 @@ go/
 gocache/
 gomodcache/
 bin/
+dist/
 openmeteo-cli.init/go/
 openmeteo-cli.init/gocache/
 openmeteo-cli.init/gomodcache/
