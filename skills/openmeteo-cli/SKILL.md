@@ -7,7 +7,7 @@ description: Fetch concise weather forecasts with openmeteo-cli for AI-agent wor
 
 Use this skill when you need a fast weather forecast for a specific latitude and longitude.
 
-Prefer the default `toon` format for agent-facing output because it is compact and minimizes token usage. Use `json` only when another tool needs machine-readable output.
+Use the default output unless another tool needs machine-readable JSON. Add `--format json` only for downstream automation.
 
 ## Commands
 
@@ -23,7 +23,7 @@ openmeteo-cli week --lat <latitude> --lon <longitude>
 - Use `day` when the caller already knows the exact date.
 - Use `week` for a compact seven-day summary.
 - Add `--units imperial` only when the caller explicitly wants Fahrenheit and mph.
-- Add `--format json` only for downstream automation.
+- Add `--format json` only when another tool needs machine-readable output.
 
 ## Examples
 
