@@ -34,38 +34,42 @@ func TestJSONEncoder_EncodeHourly(t *testing.T) {
 					Latitude:  52.52,
 					Longitude: 13.405,
 				},
-				Hours: []forecast.Hour{
-					{
-						Time:                     "06:00",
-						Weather:                  "Clear sky",
-						Temperature:              18.2,
-						ApparentTemperature:      17.5,
-						Humidity:                 72,
-						Precipitation:            0.0,
-						PrecipitationProbability: 0,
-						WindSpeed:                8.5,
-						WindGusts:                12.1,
-						WindDirection:            230,
-						UVIndex:                  1.2,
-					},
-					{
-						Time:                     "12:00",
-						Weather:                  "Mainly clear",
-						Temperature:              22.5,
-						ApparentTemperature:      21.8,
-						Humidity:                 65,
-						Precipitation:            0.0,
-						PrecipitationProbability: 10,
-						WindSpeed:                12.3,
-						WindGusts:                18.7,
-						WindDirection:            245,
-						UVIndex:                  5.2,
+				Days: map[string]forecast.DayHours{
+					"2026-03-21": {
+						Hours: []forecast.Hour{
+							{
+								Time:                     "06:00",
+								Weather:                  "Clear sky",
+								Temperature:              18.2,
+								ApparentTemperature:      17.5,
+								Humidity:                 72,
+								Precipitation:            0.0,
+								PrecipitationProbability: 0,
+								WindSpeed:                8.5,
+								WindGusts:                12.1,
+								WindDirection:            230,
+								UVIndex:                  1.2,
+							},
+							{
+								Time:                     "12:00",
+								Weather:                  "Mainly clear",
+								Temperature:              22.5,
+								ApparentTemperature:      21.8,
+								Humidity:                 65,
+								Precipitation:            0.0,
+								PrecipitationProbability: 10,
+								WindSpeed:                12.3,
+								WindGusts:                18.7,
+								WindDirection:            245,
+								UVIndex:                  5.2,
+							},
+						},
 					},
 				},
 			},
 			checkers: []func(*testing.T, *bytes.Buffer){
 				checkJSONHasMeta,
-				checkJSONHasHours,
+				checkJSONHasDays,
 				checkJSONHasNumericValues,
 			},
 		},
@@ -87,11 +91,11 @@ func TestJSONEncoder_EncodeHourly(t *testing.T) {
 					Latitude:  52.52,
 					Longitude: 13.405,
 				},
-				Hours: []forecast.Hour{},
+				Days: map[string]forecast.DayHours{},
 			},
 			checkers: []func(*testing.T, *bytes.Buffer){
 				checkJSONHasMeta,
-				checkJSONHasEmptyHours,
+				checkJSONHasEmptyHourlyDays,
 			},
 		},
 	}
@@ -146,8 +150,8 @@ func TestJSONEncoder_EncodeDaily(t *testing.T) {
 						WindSpeedMax:                12.0,
 						WindGustsMax:                18.0,
 						UVIndexMax:                  5.2,
-						Sunrise:                     "2026-03-21T06:00:00Z",
-						Sunset:                      "2026-03-21T18:00:00Z",
+						Sunrise:                     "06:00",
+						Sunset:                      "18:00",
 					},
 					{
 						Date:                        "2026-03-22",
@@ -159,8 +163,8 @@ func TestJSONEncoder_EncodeDaily(t *testing.T) {
 						WindSpeedMax:                14.0,
 						WindGustsMax:                20.0,
 						UVIndexMax:                  6.0,
-						Sunrise:                     "2026-03-22T05:59:00Z",
-						Sunset:                      "2026-03-22T18:01:00Z",
+						Sunrise:                     "05:59",
+						Sunset:                      "18:01",
 					},
 				},
 			},
@@ -225,8 +229,12 @@ func TestJSONEncoder_EncodeHourlyTo(t *testing.T) {
 			Latitude:  40.0,
 			Longitude: -74.0,
 		},
-		Hours: []forecast.Hour{
-			{Time: "12:00", Temperature: 20.0},
+		Days: map[string]forecast.DayHours{
+			"2026-03-21": {
+				Hours: []forecast.Hour{
+					{Time: "12:00", Temperature: 20.0},
+				},
+			},
 		},
 	}
 
@@ -301,8 +309,12 @@ func TestToonEncoder_EncodeHourly(t *testing.T) {
 			Latitude:  40.0,
 			Longitude: -74.0,
 		},
-		Hours: []forecast.Hour{
-			{Time: "12:00", Temperature: 20.0},
+		Days: map[string]forecast.DayHours{
+			"2026-03-21": {
+				Hours: []forecast.Hour{
+					{Time: "12:00", Temperature: 20.0},
+				},
+			},
 		},
 	}
 
@@ -380,19 +392,23 @@ func TestWriter_EncodeHourly(t *testing.T) {
 			Latitude:  40.0,
 			Longitude: -74.0,
 		},
-		Hours: []forecast.Hour{
-			{
-				Time:                     "12:00",
-				Weather:                  "Clear sky",
-				Temperature:              20.0,
-				ApparentTemperature:      18.0,
-				Humidity:                 65,
-				Precipitation:            0.0,
-				PrecipitationProbability: 10,
-				WindSpeed:                12.0,
-				WindGusts:                18.0,
-				WindDirection:            245,
-				UVIndex:                  5.2,
+		Days: map[string]forecast.DayHours{
+			"2026-03-21": {
+				Hours: []forecast.Hour{
+					{
+						Time:                     "12:00",
+						Weather:                  "Clear sky",
+						Temperature:              20.0,
+						ApparentTemperature:      18.0,
+						Humidity:                 65,
+						Precipitation:            0.0,
+						PrecipitationProbability: 10,
+						WindSpeed:                12.0,
+						WindGusts:                18.0,
+						WindDirection:            245,
+						UVIndex:                  5.2,
+					},
+				},
 			},
 		},
 	}
@@ -417,12 +433,22 @@ func TestWriter_EncodeHourly(t *testing.T) {
 	if _, ok := result["meta"]; !ok {
 		t.Error("Expected 'meta' field in output")
 	}
-	if _, ok := result["hours"]; !ok {
-		t.Error("Expected 'hours' field in output")
+	if _, ok := result["days"]; !ok {
+		t.Error("Expected 'days' field in output")
 	}
 
-	// Verify hours data
-	hours, ok := result["hours"].([]interface{})
+	// Verify days data structure
+	days, ok := result["days"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Days should be a map")
+	}
+
+	dayData, ok := days["2026-03-21"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Day data should be a map")
+	}
+
+	hours, ok := dayData["hours"].([]interface{})
 	if !ok || len(hours) != 1 {
 		t.Errorf("Expected 1 hour, got %d", len(hours))
 	}
@@ -522,8 +548,12 @@ func TestWriter_EncodeHourly_TOON(t *testing.T) {
 			Latitude:  40.0,
 			Longitude: -74.0,
 		},
-		Hours: []forecast.Hour{
-			{Time: "12:00", Temperature: 20.0},
+		Days: map[string]forecast.DayHours{
+			"2026-03-21": {
+				Hours: []forecast.Hour{
+					{Time: "12:00", Temperature: 20.0},
+				},
+			},
 		},
 	}
 
@@ -580,7 +610,7 @@ func TestWriter_EncodeInvalidFormat(t *testing.T) {
 			Latitude:  40.0,
 			Longitude: -74.0,
 		},
-		Hours: []forecast.Hour{},
+		Days: map[string]forecast.DayHours{},
 	}
 
 	w := NewWriter()
@@ -701,6 +731,17 @@ func checkJSONHasEmptyDays(t *testing.T, buf *bytes.Buffer) {
 	}
 	if days, ok := result["days"].([]interface{}); !ok || len(days) != 0 {
 		t.Error("Expected empty 'days' array in output")
+	}
+}
+
+func checkJSONHasEmptyHourlyDays(t *testing.T, buf *bytes.Buffer) {
+	var result map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &result)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal JSON: %v", err)
+	}
+	if days, ok := result["days"].(map[string]interface{}); !ok || len(days) != 0 {
+		t.Error("Expected empty 'days' map in output")
 	}
 }
 

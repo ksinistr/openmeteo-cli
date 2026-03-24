@@ -53,7 +53,7 @@ func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDa
 
 	// Map hourly conditions for the requested days
 	today := now.In(loc).Format("2006-01-02")
-	hours, err := s.mapHourlyForDays(apiResp.Hourly, today, forecastDays, loc)
+	daysMap, err := s.mapHourlyForDays(apiResp.Hourly, today, forecastDays, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +66,12 @@ func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDa
 			Latitude:    apiResp.Latitude,
 			Longitude:   apiResp.Longitude,
 		},
-		Hours: hours,
+		Days: daysMap,
 	}, nil
 }
 
 // mapHourlyForDays maps API hourly data to output format for multiple days.
-func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, numDays int, loc *time.Location) ([]Hour, error) {
+func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, numDays int, loc *time.Location) (map[string]DayHours, error) {
 	// Check that arrays are not nil before validating lengths
 	if hourly.Time == nil {
 		return nil, fmt.Errorf("%w: hourly Time array is nil", openmeteo.ErrUpstreamAPI)
@@ -140,7 +140,7 @@ func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, nu
 		return nil, fmt.Errorf("%w: hourly UVIndex array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.UVIndex), expectedLen)
 	}
 
-	hours := make([]Hour, 0, numDays*24)
+	daysMap := make(map[string]DayHours, numDays)
 	dateStr := startDate
 
 	for day := 0; day < numDays; day++ {
@@ -157,8 +157,8 @@ func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, nu
 			return nil, fmt.Errorf("no hourly data found for date %q in forecast payload: %w", dateStr, openmeteo.ErrUpstreamAPI)
 		}
 
-		// Pre-allocate with estimated size for better performance - use dayHours for potential future use
-		_ = make([]Hour, 0, 24)
+		// Pre-allocate with estimated size for better performance
+		dayHours := make([]Hour, 0, 24)
 		for i := dateIdx; i < len(hourly.Time); i++ {
 			// Skip entries that don't match the date (continue, not break, for sparse data)
 			if len(hourly.Time[i]) < 10 || hourly.Time[i][:10] != dateStr {
@@ -173,7 +173,7 @@ func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, nu
 			}
 			timeStr := t.Format("15:04")
 
-			hours = append(hours, Hour{
+			dayHours = append(dayHours, Hour{
 				Time:                     timeStr,
 				Weather:                  s.weatherMapper.GetDescription(hourly.WeatherCode[i]),
 				Temperature:              hourly.Temperature2M[i],
@@ -188,11 +188,13 @@ func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, nu
 			})
 		}
 
+		daysMap[dateStr] = DayHours{Hours: dayHours}
+
 		// Move to the next day
 		dateStr = time.Now().AddDate(0, 0, day+1).Format("2006-01-02")
 	}
 
-	return hours, nil
+	return daysMap, nil
 }
 
 // fetchDailyForecast fetches daily forecast for the specified number of days (max 14).
@@ -452,8 +454,8 @@ func (s *Service) mapDaily(daily openmeteo.Daily, idx int, loc *time.Location) (
 		WindSpeedMax:                daily.WindSpeed10MMax[idx],
 		WindGustsMax:                daily.WindGusts10MMax[idx],
 		UVIndexMax:                  daily.UVIndexMax[idx],
-		Sunrise:                     sunriseTime.Format(time.RFC3339),
-		Sunset:                      sunsetTime.Format(time.RFC3339),
+		Sunrise:                     sunriseTime.Format("15:04"),
+		Sunset:                      sunsetTime.Format("15:04"),
 	}, nil
 }
 

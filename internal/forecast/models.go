@@ -9,9 +9,14 @@ import (
 )
 
 // HourlyOutput represents the response for the hourly forecast.
-// It includes metadata and hourly forecast data.
+// It includes metadata and hourly forecast data grouped by day.
 type HourlyOutput struct {
-	Meta  Meta   `json:"meta"`
+	Meta Meta              `json:"meta"`
+	Days map[string]DayHours `json:"days"`
+}
+
+// DayHours contains hourly forecast data for a single day.
+type DayHours struct {
 	Hours []Hour `json:"hours"`
 }
 

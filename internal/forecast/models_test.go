@@ -233,8 +233,8 @@ func TestDay_HasAllFields(t *testing.T) {
 		WindSpeedMax:                10.0,
 		WindGustsMax:                15.0,
 		UVIndexMax:                  5.0,
-		Sunrise:                     "2026-03-22T06:00",
-		Sunset:                      "2026-03-22T18:00",
+		Sunrise:                     "06:00",
+		Sunset:                      "18:00",
 	}
 
 	if day.Date == "" {
@@ -247,12 +247,12 @@ func TestDay_HasAllFields(t *testing.T) {
 
 func TestHourlyOutput_HasAllFields(t *testing.T) {
 	output := HourlyOutput{
-		Meta:  Meta{},
-		Hours: []Hour{},
+		Meta: Meta{},
+		Days: map[string]DayHours{},
 	}
 
-	if len(output.Hours) != 0 {
-		t.Error("HourlyOutput.Hours should be initialized to empty slice")
+	if len(output.Days) != 0 {
+		t.Error("HourlyOutput.Days should be initialized to empty map")
 	}
 }
 

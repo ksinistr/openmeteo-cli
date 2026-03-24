@@ -270,8 +270,8 @@ Daily forecast entry.
   "wind_speed_max": 18.7,
   "wind_gusts_max": 25.4,
   "uv_index_max": 4.1,
-  "sunrise": "2026-03-22T06:30:00Z",
-  "sunset": "2026-03-22T19:45:00Z"
+  "sunrise": "06:30",
+  "sunset": "19:45"
 }
 ```
 
@@ -315,7 +315,7 @@ Unknown codes are reported as `Unknown weather code: <code>`.
 ### Time Formatting
 
 - `generated_at`: Full ISO 8601 timestamp (e.g., `2026-03-21T14:30:00Z`)
-- `sunrise`/`sunset` (daily): Full local ISO 8601 timestamps
+- `sunrise`/`sunset` (daily): Local time as `HH:MM` (e.g., `06:30`, `19:45`)
 - `time` (hourly rows): Local time as `HH:MM` (e.g., `14:30`)
 
 ## Exit Codes

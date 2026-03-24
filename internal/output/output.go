@@ -248,10 +248,14 @@ type toonDay struct {
 	Sunset                      string  `toon:"sunset"`
 }
 
-type toonHourlyOutput struct {
-	Meta  toonMeta   `toon:"meta"`
-	Units toonUnits  `toon:"units"`
+type toonDayHours struct {
 	Hours []toonHour `toon:"hours"`
+}
+
+type toonHourlyOutput struct {
+	Meta  toonMeta                `toon:"meta"`
+	Units toonUnits               `toon:"units"`
+	Days  map[string]toonDayHours `toon:"days"`
 }
 
 type toonDailyOutput struct {
@@ -262,21 +266,26 @@ type toonDailyOutput struct {
 
 // convertHourlyToTOON converts a HourlyOutput to a toon-go marshallable structure.
 func convertHourlyToTOON(output *forecast.HourlyOutput) toonHourlyOutput {
-	hours := make([]toonHour, len(output.Hours))
-	for i, h := range output.Hours {
-		hours[i] = toonHour{
-			Time:                     h.Time,
-			Weather:                  h.Weather,
-			Temperature:              h.Temperature,
-			ApparentTemperature:      h.ApparentTemperature,
-			Humidity:                 h.Humidity,
-			Precipitation:            h.Precipitation,
-			PrecipitationProbability: h.PrecipitationProbability,
-			WindSpeed:                h.WindSpeed,
-			WindGusts:                h.WindGusts,
-			WindDirection:            h.WindDirection,
-			UVIndex:                  h.UVIndex,
+	// Build days map with hours grouped by date
+	daysMap := make(map[string]toonDayHours, len(output.Days))
+	for date, dayHours := range output.Days {
+		hours := make([]toonHour, len(dayHours.Hours))
+		for i, h := range dayHours.Hours {
+			hours[i] = toonHour{
+				Time:                     h.Time,
+				Weather:                  h.Weather,
+				Temperature:              h.Temperature,
+				ApparentTemperature:      h.ApparentTemperature,
+				Humidity:                 h.Humidity,
+				Precipitation:            h.Precipitation,
+				PrecipitationProbability: h.PrecipitationProbability,
+				WindSpeed:                h.WindSpeed,
+				WindGusts:                h.WindGusts,
+				WindDirection:            h.WindDirection,
+				UVIndex:                  h.UVIndex,
+			}
 		}
+		daysMap[date] = toonDayHours{Hours: hours}
 	}
 
 	return toonHourlyOutput{
@@ -295,7 +304,7 @@ func convertHourlyToTOON(output *forecast.HourlyOutput) toonHourlyOutput {
 			PrecipitationProbability: output.Meta.Units.PrecipitationProbability,
 			UVIndex:                  output.Meta.Units.UVIndex,
 		},
-		Hours: hours,
+		Days: daysMap,
 	}
 }
 

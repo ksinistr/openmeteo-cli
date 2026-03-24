@@ -41,8 +41,8 @@ func TestService_Forecast_Hourly(t *testing.T) {
 		if !ok {
 			t.Fatalf("Expected HourlyOutput for 2 days, got %T", result)
 		}
-		if len(hourly.Hours) > 48 {
-			t.Errorf("Expected at most 48 hours for 2 days, got %d", len(hourly.Hours))
+		if len(hourly.Days) > 2 {
+			t.Errorf("Expected at most 2 days, got %d", len(hourly.Days))
 		}
 	}
 }
@@ -467,8 +467,8 @@ func TestService_mapDaily(t *testing.T) {
 		{"TempMax", 25.0},
 		{"WindSpeedMax", 10.0},
 		{"UVIndexMax", 5.0},
-		{"Sunrise", "2026-03-21T06:00:00Z"},
-		{"Sunset", "2026-03-21T18:00:00Z"},
+		{"Sunrise", "06:00"},
+		{"Sunset", "18:00"},
 	}
 
 	for _, tt := range tests {
@@ -540,13 +540,13 @@ func TestService_mapDaily_TimezoneOffset(t *testing.T) {
 		t.Fatalf("mapDaily() returned error: %v", err)
 	}
 
-	// The parsed time should be converted to UTC for consistent output
-	// Format should be RFC3339
-	if len(result.Sunrise) < 16 || result.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be in RFC3339 format, got %q", result.Sunrise)
+	// The parsed time should be in local timezone
+	// Format should be HH:MM
+	if len(result.Sunrise) != 5 || result.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be in HH:MM format, got %q", result.Sunrise)
 	}
-	if len(result.Sunset) < 16 || result.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be in RFC3339 format, got %q", result.Sunset)
+	if len(result.Sunset) != 5 || result.Sunset[2] != ':' {
+		t.Errorf("Sunset should be in HH:MM format, got %q", result.Sunset)
 	}
 }
 
@@ -674,12 +674,12 @@ func TestService_mapDaily_DSTTransition(t *testing.T) {
 				t.Errorf("Expected 3 hours, got %d", len(hoursResult))
 			}
 
-			// Verify sunrise/sunset are full datetime format
-			if len(dayResult.Sunrise) < 16 {
-				t.Errorf("Sunrise should be full datetime, got %q", dayResult.Sunrise)
+			// Verify sunrise/sunset are HH:MM format
+			if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+				t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 			}
-			if len(dayResult.Sunset) < 16 {
-				t.Errorf("Sunset should be full datetime, got %q", dayResult.Sunset)
+			if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+				t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 			}
 		})
 	}
@@ -757,12 +757,12 @@ func TestService_mapDaily_HourTimeFormat(t *testing.T) {
 		}
 	}
 
-	// Verify sunrise/sunset are full datetime
-	if len(dayResult.Sunrise) != 20 || dayResult.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunrise)
+	// Verify sunrise/sunset are HH:MM format
+	if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 	}
-	if len(dayResult.Sunset) != 20 || dayResult.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunset)
+	if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+		t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 	}
 }
 
@@ -1371,8 +1371,8 @@ func TestService_mapDaily2(t *testing.T) {
 		{"TempMax", 25.0},
 		{"WindSpeedMax", 10.0},
 		{"UVIndexMax", 5.0},
-		{"Sunrise", "2026-03-21T06:00:00Z"},
-		{"Sunset", "2026-03-21T18:00:00Z"},
+		{"Sunrise", "06:00"},
+		{"Sunset", "18:00"},
 	}
 
 	for _, tt := range tests {
@@ -1444,13 +1444,13 @@ func TestService_mapDaily_TimezoneOffset2(t *testing.T) {
 		t.Fatalf("mapDaily() returned error: %v", err)
 	}
 
-	// The parsed time should be converted to UTC for consistent output
-	// Format should be RFC3339
-	if len(result.Sunrise) < 16 || result.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be in RFC3339 format, got %q", result.Sunrise)
+	// The parsed time should be in local timezone
+	// Format should be HH:MM
+	if len(result.Sunrise) != 5 || result.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be in HH:MM format, got %q", result.Sunrise)
 	}
-	if len(result.Sunset) < 16 || result.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be in RFC3339 format, got %q", result.Sunset)
+	if len(result.Sunset) != 5 || result.Sunset[2] != ':' {
+		t.Errorf("Sunset should be in HH:MM format, got %q", result.Sunset)
 	}
 }
 
@@ -1578,12 +1578,12 @@ func TestService_mapDaily_DSTTransition2(t *testing.T) {
 				t.Errorf("Expected 3 hours, got %d", len(hoursResult))
 			}
 
-			// Verify sunrise/sunset are full datetime format
-			if len(dayResult.Sunrise) < 16 {
-				t.Errorf("Sunrise should be full datetime, got %q", dayResult.Sunrise)
+			// Verify sunrise/sunset are HH:MM format
+			if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+				t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 			}
-			if len(dayResult.Sunset) < 16 {
-				t.Errorf("Sunset should be full datetime, got %q", dayResult.Sunset)
+			if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+				t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 			}
 		})
 	}
@@ -1661,12 +1661,12 @@ func TestService_mapDaily_HourTimeFormat2(t *testing.T) {
 		}
 	}
 
-	// Verify sunrise/sunset are full datetime
-	if len(dayResult.Sunrise) != 20 || dayResult.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunrise)
+	// Verify sunrise/sunset are HH:MM format
+	if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 	}
-	if len(dayResult.Sunset) != 20 || dayResult.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunset)
+	if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+		t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 	}
 }
 
@@ -2275,8 +2275,8 @@ func TestService_mapDaily3(t *testing.T) {
 		{"TempMax", 25.0},
 		{"WindSpeedMax", 10.0},
 		{"UVIndexMax", 5.0},
-		{"Sunrise", "2026-03-21T06:00:00Z"},
-		{"Sunset", "2026-03-21T18:00:00Z"},
+		{"Sunrise", "06:00"},
+		{"Sunset", "18:00"},
 	}
 
 	for _, tt := range tests {
@@ -2348,13 +2348,13 @@ func TestService_mapDaily_TimezoneOffset3(t *testing.T) {
 		t.Fatalf("mapDaily() returned error: %v", err)
 	}
 
-	// The parsed time should be converted to UTC for consistent output
-	// Format should be RFC3339
-	if len(result.Sunrise) < 16 || result.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be in RFC3339 format, got %q", result.Sunrise)
+	// The parsed time should be in local timezone
+	// Format should be HH:MM
+	if len(result.Sunrise) != 5 || result.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be in HH:MM format, got %q", result.Sunrise)
 	}
-	if len(result.Sunset) < 16 || result.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be in RFC3339 format, got %q", result.Sunset)
+	if len(result.Sunset) != 5 || result.Sunset[2] != ':' {
+		t.Errorf("Sunset should be in HH:MM format, got %q", result.Sunset)
 	}
 }
 
@@ -2482,12 +2482,12 @@ func TestService_mapDaily_DSTTransition3(t *testing.T) {
 				t.Errorf("Expected 3 hours, got %d", len(hoursResult))
 			}
 
-			// Verify sunrise/sunset are full datetime format
-			if len(dayResult.Sunrise) < 16 {
-				t.Errorf("Sunrise should be full datetime, got %q", dayResult.Sunrise)
+			// Verify sunrise/sunset are HH:MM format
+			if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+				t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 			}
-			if len(dayResult.Sunset) < 16 {
-				t.Errorf("Sunset should be full datetime, got %q", dayResult.Sunset)
+			if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+				t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 			}
 		})
 	}
@@ -2565,12 +2565,12 @@ func TestService_mapDaily_HourTimeFormat3(t *testing.T) {
 		}
 	}
 
-	// Verify sunrise/sunset are full datetime
-	if len(dayResult.Sunrise) != 20 || dayResult.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunrise)
+	// Verify sunrise/sunset are HH:MM format
+	if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 	}
-	if len(dayResult.Sunset) != 20 || dayResult.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunset)
+	if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+		t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 	}
 }
 
@@ -3476,8 +3476,8 @@ func TestService_mapDaily4(t *testing.T) {
 		{"TempMax", 25.0},
 		{"WindSpeedMax", 10.0},
 		{"UVIndexMax", 5.0},
-		{"Sunrise", "2026-03-21T06:00:00Z"},
-		{"Sunset", "2026-03-21T18:00:00Z"},
+		{"Sunrise", "06:00"},
+		{"Sunset", "18:00"},
 	}
 
 	for _, tt := range tests {
@@ -3549,13 +3549,13 @@ func TestService_mapDaily_TimezoneOffset4(t *testing.T) {
 		t.Fatalf("mapDaily() returned error: %v", err)
 	}
 
-	// The parsed time should be converted to UTC for consistent output
-	// Format should be RFC3339
-	if len(result.Sunrise) < 16 || result.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be in RFC3339 format, got %q", result.Sunrise)
+	// The parsed time should be in local timezone
+	// Format should be HH:MM
+	if len(result.Sunrise) != 5 || result.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be in HH:MM format, got %q", result.Sunrise)
 	}
-	if len(result.Sunset) < 16 || result.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be in RFC3339 format, got %q", result.Sunset)
+	if len(result.Sunset) != 5 || result.Sunset[2] != ':' {
+		t.Errorf("Sunset should be in HH:MM format, got %q", result.Sunset)
 	}
 }
 
@@ -3683,12 +3683,12 @@ func TestService_mapDaily_DSTTransition4(t *testing.T) {
 				t.Errorf("Expected 3 hours, got %d", len(hoursResult))
 			}
 
-			// Verify sunrise/sunset are full datetime format
-			if len(dayResult.Sunrise) < 16 {
-				t.Errorf("Sunrise should be full datetime, got %q", dayResult.Sunrise)
+			// Verify sunrise/sunset are HH:MM format
+			if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+				t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 			}
-			if len(dayResult.Sunset) < 16 {
-				t.Errorf("Sunset should be full datetime, got %q", dayResult.Sunset)
+			if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+				t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 			}
 		})
 	}
@@ -3766,12 +3766,12 @@ func TestService_mapDaily_HourTimeFormat4(t *testing.T) {
 		}
 	}
 
-	// Verify sunrise/sunset are full datetime
-	if len(dayResult.Sunrise) != 20 || dayResult.Sunrise[10] != 'T' {
-		t.Errorf("Sunrise should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunrise)
+	// Verify sunrise/sunset are HH:MM format
+	if len(dayResult.Sunrise) != 5 || dayResult.Sunrise[2] != ':' {
+		t.Errorf("Sunrise should be HH:MM format, got %q", dayResult.Sunrise)
 	}
-	if len(dayResult.Sunset) != 20 || dayResult.Sunset[10] != 'T' {
-		t.Errorf("Sunset should be full datetime YYYY-MM-DDTHH:MM:SSZ, got %q", dayResult.Sunset)
+	if len(dayResult.Sunset) != 5 || dayResult.Sunset[2] != ':' {
+		t.Errorf("Sunset should be HH:MM format, got %q", dayResult.Sunset)
 	}
 }
 
