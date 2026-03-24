@@ -83,6 +83,16 @@ func (e *EncodingError) Error() string {
 
 // writeJSON encodes the data as JSON format.
 func writeJSON(data interface{}, out io.Writer) error {
+	switch d := data.(type) {
+	case *forecast.HourlyOutput:
+		if d == nil {
+			return fmt.Errorf("cannot write nil HourlyOutput")
+		}
+	case *forecast.DailyOutput:
+		if d == nil {
+			return fmt.Errorf("cannot write nil DailyOutput")
+		}
+	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(data)
@@ -94,21 +104,16 @@ func writeTOON(data interface{}, out io.Writer) error {
 	var err error
 
 	switch d := data.(type) {
-	case *forecast.TodayOutput:
+	case *forecast.HourlyOutput:
 		if d == nil {
-			return fmt.Errorf("cannot write nil TodayOutput")
+			return fmt.Errorf("cannot write nil HourlyOutput")
 		}
-		toonData = convertTodayToTOON(d)
-	case *forecast.DayOutput:
+		toonData = convertHourlyToTOON(d)
+	case *forecast.DailyOutput:
 		if d == nil {
-			return fmt.Errorf("cannot write nil DayOutput")
+			return fmt.Errorf("cannot write nil DailyOutput")
 		}
-		toonData = convertDayToTOON(d)
-	case *forecast.WeekOutput:
-		if d == nil {
-			return fmt.Errorf("cannot write nil WeekOutput")
-		}
-		toonData = convertWeekToTOON(d)
+		toonData = convertDailyToTOON(d)
 	default:
 		return fmt.Errorf("unsupported type for TOON encoding: %T", data)
 	}
@@ -133,21 +138,21 @@ func NewJSONEncoder() *JSONEncoder {
 	return &JSONEncoder{}
 }
 
-// EncodeTodayTo encodes a TodayOutput to JSON format.
+// EncodeHourlyTo encodes a HourlyOutput to JSON format.
 // Deprecated: Use Writer.Write with format "json" instead.
-func (e *JSONEncoder) EncodeTodayTo(output *forecast.TodayOutput, out io.Writer) error {
+func (e *JSONEncoder) EncodeHourlyTo(output *forecast.HourlyOutput, out io.Writer) error {
+	if output == nil {
+		return fmt.Errorf("cannot write nil HourlyOutput")
+	}
 	return writeJSON(output, out)
 }
 
-// EncodeDayTo encodes a DayOutput to JSON format.
+// EncodeDailyTo encodes a DailyOutput to JSON format.
 // Deprecated: Use Writer.Write with format "json" instead.
-func (e *JSONEncoder) EncodeDayTo(output *forecast.DayOutput, out io.Writer) error {
-	return writeJSON(output, out)
-}
-
-// EncodeWeekTo encodes a WeekOutput to JSON format.
-// Deprecated: Use Writer.Write with format "json" instead.
-func (e *JSONEncoder) EncodeWeekTo(output *forecast.WeekOutput, out io.Writer) error {
+func (e *JSONEncoder) EncodeDailyTo(output *forecast.DailyOutput, out io.Writer) error {
+	if output == nil {
+		return fmt.Errorf("cannot write nil DailyOutput")
+	}
 	return writeJSON(output, out)
 }
 
@@ -161,24 +166,23 @@ func NewToonEncoder() *ToonEncoder {
 	return &ToonEncoder{}
 }
 
-// EncodeToday encodes a TodayOutput to TOON format.
+// EncodeHourly encodes a HourlyOutput to TOON format.
 // Deprecated: Use Writer.Write with format "toon" instead.
-func (e *ToonEncoder) EncodeToday(output *forecast.TodayOutput) (string, error) {
-	toonData := convertTodayToTOON(output)
+func (e *ToonEncoder) EncodeHourly(output *forecast.HourlyOutput) (string, error) {
+	if output == nil {
+		return "", fmt.Errorf("cannot write nil HourlyOutput")
+	}
+	toonData := convertHourlyToTOON(output)
 	return toon.MarshalString(toonData, toon.WithIndent(2))
 }
 
-// EncodeDay encodes a DayOutput to TOON format.
+// EncodeDaily encodes a DailyOutput to TOON format.
 // Deprecated: Use Writer.Write with format "toon" instead.
-func (e *ToonEncoder) EncodeDay(output *forecast.DayOutput) (string, error) {
-	toonData := convertDayToTOON(output)
-	return toon.MarshalString(toonData, toon.WithIndent(2))
-}
-
-// EncodeWeek encodes a WeekOutput to TOON format.
-// Deprecated: Use Writer.Write with format "toon" instead.
-func (e *ToonEncoder) EncodeWeek(output *forecast.WeekOutput) (string, error) {
-	toonData := convertWeekToTOON(output)
+func (e *ToonEncoder) EncodeDaily(output *forecast.DailyOutput) (string, error) {
+	if output == nil {
+		return "", fmt.Errorf("cannot write nil DailyOutput")
+	}
+	toonData := convertDailyToTOON(output)
 	return toon.MarshalString(toonData, toon.WithIndent(2))
 }
 
@@ -244,28 +248,20 @@ type toonDay struct {
 	Sunset                      string  `toon:"sunset"`
 }
 
-type toonTodayOutput struct {
-	Meta    toonMeta    `toon:"meta"`
-	Units   toonUnits   `toon:"units"`
-	Current toonCurrent `toon:"current"`
-	Hours   []toonHour  `toon:"hours"`
-}
-
-type toonDayOutput struct {
+type toonHourlyOutput struct {
 	Meta  toonMeta   `toon:"meta"`
 	Units toonUnits  `toon:"units"`
-	Day   toonDay    `toon:"day"`
 	Hours []toonHour `toon:"hours"`
 }
 
-type toonWeekOutput struct {
+type toonDailyOutput struct {
 	Meta  toonMeta  `toon:"meta"`
 	Units toonUnits `toon:"units"`
 	Days  []toonDay `toon:"days"`
 }
 
-// convertTodayToTOON converts a TodayOutput to a toon-go marshallable structure.
-func convertTodayToTOON(output *forecast.TodayOutput) toonTodayOutput {
+// convertHourlyToTOON converts a HourlyOutput to a toon-go marshallable structure.
+func convertHourlyToTOON(output *forecast.HourlyOutput) toonHourlyOutput {
 	hours := make([]toonHour, len(output.Hours))
 	for i, h := range output.Hours {
 		hours[i] = toonHour{
@@ -283,7 +279,7 @@ func convertTodayToTOON(output *forecast.TodayOutput) toonTodayOutput {
 		}
 	}
 
-	return toonTodayOutput{
+	return toonHourlyOutput{
 		Meta: toonMeta{
 			GeneratedAt: output.Meta.GeneratedAt.Format(time.RFC3339),
 			Timezone:    output.Meta.Timezone,
@@ -299,77 +295,12 @@ func convertTodayToTOON(output *forecast.TodayOutput) toonTodayOutput {
 			PrecipitationProbability: output.Meta.Units.PrecipitationProbability,
 			UVIndex:                  output.Meta.Units.UVIndex,
 		},
-		Current: toonCurrent{
-			Time:                     output.Current.Time,
-			Weather:                  output.Current.Weather,
-			Temperature:              output.Current.Temperature,
-			ApparentTemperature:      output.Current.ApparentTemperature,
-			Humidity:                 output.Current.Humidity,
-			Precipitation:            output.Current.Precipitation,
-			PrecipitationProbability: output.Current.PrecipitationProbability,
-			WindSpeed:                output.Current.WindSpeed,
-			WindGusts:                output.Current.WindGusts,
-			WindDirection:            output.Current.WindDirection,
-			UVIndex:                  output.Current.UVIndex,
-		},
 		Hours: hours,
 	}
 }
 
-// convertDayToTOON converts a DayOutput to a toon-go marshallable structure.
-func convertDayToTOON(output *forecast.DayOutput) toonDayOutput {
-	hours := make([]toonHour, len(output.Hours))
-	for i, h := range output.Hours {
-		hours[i] = toonHour{
-			Time:                     h.Time,
-			Weather:                  h.Weather,
-			Temperature:              h.Temperature,
-			ApparentTemperature:      h.ApparentTemperature,
-			Humidity:                 h.Humidity,
-			Precipitation:            h.Precipitation,
-			PrecipitationProbability: h.PrecipitationProbability,
-			WindSpeed:                h.WindSpeed,
-			WindGusts:                h.WindGusts,
-			WindDirection:            h.WindDirection,
-			UVIndex:                  h.UVIndex,
-		}
-	}
-
-	return toonDayOutput{
-		Meta: toonMeta{
-			GeneratedAt: output.Meta.GeneratedAt.Format(time.RFC3339),
-			Timezone:    output.Meta.Timezone,
-			Latitude:    output.Meta.Latitude,
-			Longitude:   output.Meta.Longitude,
-		},
-		Units: toonUnits{
-			Temperature:              output.Meta.Units.Temperature,
-			Humidity:                 output.Meta.Units.Humidity,
-			WindSpeed:                output.Meta.Units.WindSpeed,
-			WindDirection:            output.Meta.Units.WindDirection,
-			Precipitation:            output.Meta.Units.Precipitation,
-			PrecipitationProbability: output.Meta.Units.PrecipitationProbability,
-			UVIndex:                  output.Meta.Units.UVIndex,
-		},
-		Day: toonDay{
-			Date:                        output.Day.Date,
-			Weather:                     output.Day.Weather,
-			TempMin:                     output.Day.TempMin,
-			TempMax:                     output.Day.TempMax,
-			PrecipitationSum:            output.Day.PrecipitationSum,
-			PrecipitationProbabilityMax: output.Day.PrecipitationProbabilityMax,
-			WindSpeedMax:                output.Day.WindSpeedMax,
-			WindGustsMax:                output.Day.WindGustsMax,
-			UVIndexMax:                  output.Day.UVIndexMax,
-			Sunrise:                     output.Day.Sunrise,
-			Sunset:                      output.Day.Sunset,
-		},
-		Hours: hours,
-	}
-}
-
-// convertWeekToTOON converts a WeekOutput to a toon-go marshallable structure.
-func convertWeekToTOON(output *forecast.WeekOutput) toonWeekOutput {
+// convertDailyToTOON converts a DailyOutput to a toon-go marshallable structure.
+func convertDailyToTOON(output *forecast.DailyOutput) toonDailyOutput {
 	days := make([]toonDay, len(output.Days))
 	for i, d := range output.Days {
 		days[i] = toonDay{
@@ -387,7 +318,7 @@ func convertWeekToTOON(output *forecast.WeekOutput) toonWeekOutput {
 		}
 	}
 
-	return toonWeekOutput{
+	return toonDailyOutput{
 		Meta: toonMeta{
 			GeneratedAt: output.Meta.GeneratedAt.Format(time.RFC3339),
 			Timezone:    output.Meta.Timezone,

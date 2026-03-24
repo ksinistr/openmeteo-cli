@@ -7,223 +7,212 @@ import (
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
-		command string
 		args    []string
 		want    *Config
 		wantErr bool
 		errMsg  string
 	}{
 		{
-			name:    "today command with valid arguments",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060"},
+			name: " forecast command with hourly and default days",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly"},
 			want: &Config{
-				Command: "today",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "",
+				Hourly:       true,
+				Daily:        false,
+				ForecastDays: 1,
+				Lat:          40.7128,
+				Lon:          -74.0060,
+				Units:        "metric",
+				Format:       "toon",
 			},
 			wantErr: false,
 		},
 		{
-			name:    "today command with imperial units",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--units", "imperial"},
+			name: " forecast command with hourly and 2 days",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "2"},
 			want: &Config{
-				Command: "today",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "imperial",
-				Format:  "toon",
-				DateStr: "",
+				Hourly:       true,
+				Daily:        false,
+				ForecastDays: 2,
+				Lat:          40.7128,
+				Lon:          -74.0060,
+				Units:        "metric",
+				Format:       "toon",
 			},
 			wantErr: false,
 		},
 		{
-			name:    "today command with json format",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--format", "json"},
+			name: " forecast command with imperial units",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--daily", "--units", "imperial"},
 			want: &Config{
-				Command: "today",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "json",
-				DateStr: "",
+				Hourly:       false,
+				Daily:        true,
+				ForecastDays: 1,
+				Lat:          40.7128,
+				Lon:          -74.0060,
+				Units:        "imperial",
+				Format:       "toon",
 			},
 			wantErr: false,
 		},
 		{
-			name:    "day command with valid arguments",
-			command: "day",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--date", "2026-03-22"},
+			name: " forecast command with json format",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--daily", "--format", "json"},
 			want: &Config{
-				Command: "day",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "2026-03-22",
+				Hourly:       false,
+				Daily:        true,
+				ForecastDays: 1,
+				Lat:          40.7128,
+				Lon:          -74.0060,
+				Units:        "metric",
+				Format:       "json",
 			},
 			wantErr: false,
 		},
 		{
-			name:    "week command with valid arguments",
-			command: "week",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060"},
+			name: " forecast command with daily and 7 days",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "7"},
 			want: &Config{
-				Command: "week",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "",
+				Hourly:       false,
+				Daily:        true,
+				ForecastDays: 7,
+				Lat:          40.7128,
+				Lon:          -74.0060,
+				Units:        "metric",
+				Format:       "toon",
 			},
 			wantErr: false,
 		},
 		{
-			name:    "missing lat to lon are required",
-			command: "today",
-			args:    []string{"--lon", "-74.0060"},
-			want:    nil,
+			name: " missing lat and lon are required",
+			args: []string{"--lon", "-74.0060"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "lat and lon are required",
 		},
 		{
-			name:    "invalid latitude",
-			command: "today",
-			args:    []string{"--lat", "100", "--lon", "-74.0060"},
-			want:    nil,
+			name: " invalid latitude",
+			args: []string{"--lat", "100", "--lon", "-74.0060", "--hourly"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "latitude must be between -90 and 90",
 		},
 		{
-			name:    "invalid longitude",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-200"},
-			want:    nil,
+			name: " invalid longitude",
+			args: []string{"--lat", "40.7128", "--lon", "-200", "--hourly"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "longitude must be between -180 and 180",
 		},
 		{
-			name:    "invalid units",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--units", "invalid"},
-			want:    nil,
+			name: " invalid units",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--units", "invalid"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "units must be 'metric' or 'imperial'",
 		},
 		{
-			name:    "invalid format",
-			command: "today",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--format", "invalid"},
-			want:    nil,
+			name: " invalid format",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--format", "invalid"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "format must be 'toon' or 'json'",
 		},
 		{
-			name:    "day command missing date - validation now in app package",
-			command: "day",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060"},
-			want: &Config{
-				Command: "day",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "",
-			},
-			wantErr: false, // cli.Parse now accepts this, validation is in app.go
+			name: " missing both hourly and daily",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "must specify either --hourly or --daily",
 		},
 		{
-			name:    "day command invalid date format - validation now in app package",
-			command: "day",
-			args:    []string{"--lat", "40.7128", "--lon", "-74.0060", "--date", "invalid"},
-			want: &Config{
-				Command: "day",
-				Lat:     40.7128,
-				Lon:     -74.0060,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "invalid",
-			},
-			wantErr: false, // cli.Parse no longer validates date format, validation is in app.go
+			name: " both hourly and daily specified",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--daily"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "cannot use both --hourly and --daily",
 		},
 		{
-			name:    "duplicate --lat flag",
-			command: "today",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--lat", "41.0"},
-			want:    nil,
+			name: " hourly exceeds max days",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "3"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "--hourly supports maximum 2 days",
+		},
+		{
+			name: " daily exceeds max days",
+			args: []string{"--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "15"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "--daily supports maximum 14 days",
+		},
+		{
+			name: " duplicate --lat flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--lat", "41.0"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "duplicate flag: --lat",
 		},
 		{
-			name:    "duplicate --lon flag",
-			command: "today",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--lon", "-75.0"},
-			want:    nil,
+			name: " duplicate --lon flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--lon", "-75.0"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "duplicate flag: --lon",
 		},
 		{
-			name:    "duplicate --units flag",
-			command: "today",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--units", "metric", "--units", "imperial"},
-			want:    nil,
+			name: " duplicate --units flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--units", "metric", "--units", "imperial"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "duplicate flag: --units",
 		},
 		{
-			name:    "duplicate --format flag",
-			command: "today",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--format", "toon", "--format", "json"},
-			want:    nil,
+			name: " duplicate --format flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--format", "toon", "--format", "json"},
+			want: nil,
 			wantErr: true,
 			errMsg:  "duplicate flag: --format",
 		},
 		{
-			name:    "duplicate --date flag",
-			command: "day",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-01-01", "--date", "2026-01-02"},
-			want:    nil,
+			name: " duplicate --hourly flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--hourly"},
+			want: nil,
 			wantErr: true,
-			errMsg:  "duplicate flag: --date",
+			errMsg:  "duplicate flag: --hourly",
 		},
 		{
-			name:    "today command with --date flag - validation now in app package",
-			command: "today",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-03-22"},
-			want: &Config{
-				Command: "today",
-				Lat:     40.0,
-				Lon:     -74.0,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "2026-03-22",
-			},
-			wantErr: false, // cli.Parse now accepts this, validation is in app.go
+			name: " duplicate --daily flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--daily", "--daily"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --daily",
 		},
 		{
-			name:    "week command with --date flag - validation now in app package",
-			command: "week",
-			args:    []string{"--lat", "40.0", "--lon", "-74.0", "--date", "2026-03-22"},
-			want: &Config{
-				Command: "week",
-				Lat:     40.0,
-				Lon:     -74.0,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "2026-03-22",
-			},
-			wantErr: false, // cli.Parse now accepts this, validation is in app.go
+			name: " duplicate --forecast-days flag",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--forecast-days", "1", "--forecast-days", "2"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "duplicate flag: --forecast-days",
+		},
+		{
+			name: " invalid forecast-days value",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--forecast-days", "abc"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "invalid forecast-days value",
+		},
+		{
+			name: " forecast-days cannot be zero",
+			args: []string{"--lat", "40.0", "--lon", "-74.0", "--hourly", "--forecast-days", "0"},
+			want: nil,
+			wantErr: true,
+			errMsg:  "forecast-days must be at least 1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.command, tt.args)
+			got, err := Parse(tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -233,8 +222,14 @@ func TestParse(t *testing.T) {
 				_ = err.Error()
 			}
 			if err == nil && !tt.wantErr {
-				if got.Command != tt.want.Command {
-					t.Errorf("Parse() Command = %v, want %v", got.Command, tt.want.Command)
+				if got.Hourly != tt.want.Hourly {
+					t.Errorf("Parse() Hourly = %v, want %v", got.Hourly, tt.want.Hourly)
+				}
+				if got.Daily != tt.want.Daily {
+					t.Errorf("Parse() Daily = %v, want %v", got.Daily, tt.want.Daily)
+				}
+				if got.ForecastDays != tt.want.ForecastDays {
+					t.Errorf("Parse() ForecastDays = %v, want %v", got.ForecastDays, tt.want.ForecastDays)
 				}
 				if got.Lat != tt.want.Lat {
 					t.Errorf("Parse() Lat = %v, want %v", got.Lat, tt.want.Lat)
@@ -248,9 +243,6 @@ func TestParse(t *testing.T) {
 				if got.Format != tt.want.Format {
 					t.Errorf("Parse() Format = %v, want %v", got.Format, tt.want.Format)
 				}
-				if got.DateStr != tt.want.DateStr {
-					t.Errorf("Parse() DateStr = %v, want %v", got.DateStr, tt.want.DateStr)
-				}
 			}
 		})
 	}
@@ -259,40 +251,50 @@ func TestParse(t *testing.T) {
 func TestParseWithHelpFlags(t *testing.T) {
 	tests := []struct {
 		name    string
-		command string
 		args    []string
 		wantErr bool
 		errType string
 	}{
 		{
-			name:    "today with -h flag alone",
-			command: "today",
+			name:    "with -h flag alone",
 			args:    []string{"-h"},
 			wantErr: false,
 		},
 		{
-			name:    "today with --help flag alone",
-			command: "today",
+			name:    "with --help flag alone",
 			args:    []string{"--help"},
 			wantErr: false,
 		},
 		{
-			name:    "day with -h flag after valid args",
-			command: "day",
+			name:    "with -h flag after valid args",
 			args:    []string{"--lat", "40", "--lon", "-74", "-h"},
 			wantErr: false,
 		},
 		{
-			name:    "week with --help flag after valid args",
-			command: "week",
+			name:    "with --help flag after valid args",
 			args:    []string{"--lat", "40", "--lon", "-74", "--units", "imperial", "--help"},
+			wantErr: false,
+		},
+		{
+			name:    "with --hourly and -h",
+			args:    []string{"--lat", "40", "--lon", "-74", "--hourly", "-h"},
+			wantErr: false,
+		},
+		{
+			name:    "with --daily and --help",
+			args:    []string{"--lat", "40", "--lon", "-74", "--daily", "--help"},
+			wantErr: false,
+		},
+		{
+			name:    "with --forecast-days and --help",
+			args:    []string{"--lat", "40", "--lon", "-74", "--hourly", "--forecast-days", "1", "--help"},
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse(tt.command, tt.args)
+			_, err := Parse(tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -304,36 +306,27 @@ func TestParseWithHelpFlags(t *testing.T) {
 func TestParseDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 	tests := []struct {
 		name      string
-		command   string
 		args      []string
 		want      *Config
 		wantErr   bool
 		errString string
 	}{
 		{
-			name:    "day date value can be help token",
-			command: "day",
-			args:    []string{"--lat", "40", "--lon", "-74", "--date", "--help"},
-			want: &Config{
-				Command: "day",
-				Lat:     40,
-				Lon:     -74,
-				Units:   "metric",
-				Format:  "toon",
-				DateStr: "--help",
-			},
+			name: "forecast-days value help token is parsed as number fails",
+			args: []string{"--lat", "40", "--lon", "-74", "--hourly", "--forecast-days", "--help"},
+			want: nil,
+			wantErr: true,
+			errString: "invalid forecast-days value",
 		},
 		{
 			name:      "units value help token stays a value",
-			command:   "today",
-			args:      []string{"--lat", "40", "--lon", "-74", "--units", "--help"},
+			args:      []string{"--lat", "40", "--lon", "-74", "--hourly", "--units", "--help"},
 			wantErr:   true,
 			errString: "units must be 'metric' or 'imperial'",
 		},
 		{
 			name:      "lat value help token stays a value",
-			command:   "today",
-			args:      []string{"--lat", "-h", "--lon", "-74"},
+			args:      []string{"--lat", "-h", "--lon", "-74", "--hourly"},
 			wantErr:   true,
 			errString: "invalid lat value",
 		},
@@ -341,7 +334,7 @@ func TestParseDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.command, tt.args)
+			got, err := Parse(tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -354,8 +347,14 @@ func TestParseDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 			if got == nil {
 				t.Fatal("Parse() returned nil config")
 			}
-			if got.Command != tt.want.Command {
-				t.Fatalf("Parse() Command = %v, want %v", got.Command, tt.want.Command)
+			if got.Hourly != tt.want.Hourly {
+				t.Fatalf("Parse() Hourly = %v, want %v", got.Hourly, tt.want.Hourly)
+			}
+			if got.Daily != tt.want.Daily {
+				t.Fatalf("Parse() Daily = %v, want %v", got.Daily, tt.want.Daily)
+			}
+			if got.ForecastDays != tt.want.ForecastDays {
+				t.Fatalf("Parse() ForecastDays = %v, want %v", got.ForecastDays, tt.want.ForecastDays)
 			}
 			if got.Lat != tt.want.Lat {
 				t.Fatalf("Parse() Lat = %v, want %v", got.Lat, tt.want.Lat)
@@ -368,9 +367,6 @@ func TestParseDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 			}
 			if got.Format != tt.want.Format {
 				t.Fatalf("Parse() Format = %v, want %v", got.Format, tt.want.Format)
-			}
-			if got.DateStr != tt.want.DateStr {
-				t.Fatalf("Parse() DateStr = %v, want %v", got.DateStr, tt.want.DateStr)
 			}
 		})
 	}

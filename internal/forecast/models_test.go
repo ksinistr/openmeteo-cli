@@ -245,37 +245,24 @@ func TestDay_HasAllFields(t *testing.T) {
 	}
 }
 
-func TestTodayOutput_HasAllFields(t *testing.T) {
-	output := TodayOutput{
-		Meta:    Meta{},
-		Current: Current{},
-		Hours:   []Hour{},
-	}
-
-	if len(output.Hours) != 0 {
-		t.Error("TodayOutput.Hours should be initialized to empty slice")
-	}
-}
-
-func TestDayOutput_HasAllFields(t *testing.T) {
-	output := DayOutput{
+func TestHourlyOutput_HasAllFields(t *testing.T) {
+	output := HourlyOutput{
 		Meta:  Meta{},
-		Day:   Day{},
 		Hours: []Hour{},
 	}
 
 	if len(output.Hours) != 0 {
-		t.Error("DayOutput.Hours should be initialized to empty slice")
+		t.Error("HourlyOutput.Hours should be initialized to empty slice")
 	}
 }
 
-func TestWeekOutput_HasAllFields(t *testing.T) {
-	output := WeekOutput{
+func TestDailyOutput_HasAllFields(t *testing.T) {
+	output := DailyOutput{
 		Meta: Meta{},
 		Days: []Day{},
 	}
 
 	if len(output.Days) != 0 {
-		t.Error("WeekOutput.Days should be initialized to empty slice")
+		t.Error("DailyOutput.Days should be initialized to empty slice")
 	}
 }

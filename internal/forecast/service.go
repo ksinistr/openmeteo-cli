@@ -25,53 +25,22 @@ func NewService(client *openmeteo.Client, mapper *weathercode.Mapper) *Service {
 	}
 }
 
-// Today returns today's forecast.
-func (s *Service) Today(lat, lon float64, units string) (*TodayOutput, error) {
-	now := time.Now()
-	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", 1)
-	if err != nil {
-		return nil, err
+// Forecast returns weather forecast based on the mode.
+func (s *Service) Forecast(lat, lon float64, units string, hourly bool, forecastDays int) (interface{}, error) {
+	if hourly {
+		return s.fetchHourlyForecast(lat, lon, units, forecastDays)
 	}
-
-	// Get timezone from API response
-	loc, err := time.LoadLocation(apiResp.Timezone)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid timezone %q from API: %v", openmeteo.ErrUpstreamAPI, apiResp.Timezone, err)
-	}
-
-	// Map current conditions
-	current, err := s.mapCurrent(apiResp.Current, loc)
-	if err != nil {
-		return nil, err
-	}
-
-	// Map hourly conditions for today using the location's current local date
-	today := now.In(loc).Format("2006-01-02")
-	hours, err := s.mapHourly(apiResp.Hourly, today, loc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TodayOutput{
-		Meta: Meta{
-			GeneratedAt: now,
-			Units:       s.getUnits(units),
-			Timezone:    apiResp.Timezone,
-			Latitude:    apiResp.Latitude,
-			Longitude:   apiResp.Longitude,
-		},
-		Current: current,
-		Hours:   hours,
-	}, nil
+	return s.fetchDailyForecast(lat, lon, units, forecastDays)
 }
 
-// Day returns forecast for a specific date.
-func (s *Service) Day(lat, lon float64, date time.Time, units string) (*DayOutput, error) {
-	now := time.Now()
-	// Use date as YYYY-MM-DD string
-	dateStr := date.Format("2006-01-02")
+// fetchHourlyForecast fetches hourly forecast for the specified number of days (max 2).
+func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDays int) (*HourlyOutput, error) {
+	if forecastDays < 1 || forecastDays > 2 {
+		return nil, fmt.Errorf("hourly forecast supports 1-2 days, got %d", forecastDays)
+	}
 
-	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", 16)
+	now := time.Now()
+	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", forecastDays)
 	if err != nil {
 		return nil, err
 	}
@@ -82,32 +51,14 @@ func (s *Service) Day(lat, lon float64, date time.Time, units string) (*DayOutpu
 		return nil, fmt.Errorf("%w: invalid timezone %q from API: %v", openmeteo.ErrUpstreamAPI, apiResp.Timezone, err)
 	}
 
-	// Find the daily entry for the requested date
-	dailyIdx := -1
-	for i, dDate := range apiResp.Daily.Time {
-		if dDate == dateStr {
-			dailyIdx = i
-			break
-		}
-	}
-
-	if dailyIdx == -1 {
-		return nil, ErrDateUnavailable
-	}
-
-	// Map daily conditions
-	day, err := s.mapDaily(apiResp.Daily, dailyIdx, loc)
+	// Map hourly conditions for the requested days
+	today := now.In(loc).Format("2006-01-02")
+	hours, err := s.mapHourlyForDays(apiResp.Hourly, today, forecastDays, loc)
 	if err != nil {
 		return nil, err
 	}
 
-	// Map hourly conditions for the requested date
-	hours, err := s.mapHourly(apiResp.Hourly, dateStr, loc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DayOutput{
+	return &HourlyOutput{
 		Meta: Meta{
 			GeneratedAt: now,
 			Units:       s.getUnits(units),
@@ -115,33 +66,143 @@ func (s *Service) Day(lat, lon float64, date time.Time, units string) (*DayOutpu
 			Latitude:    apiResp.Latitude,
 			Longitude:   apiResp.Longitude,
 		},
-		Day:   day,
 		Hours: hours,
 	}, nil
 }
 
-// mapWeekDaily maps API daily data to output format for 7-day week.
-// maxDays limits the number of days returned (typically 7).
-func (s *Service) mapWeekDaily(daily openmeteo.Daily, maxDays int, loc *time.Location) ([]Day, error) {
-	if len(daily.Time) < maxDays {
-		return nil, fmt.Errorf("upstream returned %d daily entries, expected %d: %w", len(daily.Time), maxDays, openmeteo.ErrUpstreamAPI)
+// mapHourlyForDays maps API hourly data to output format for multiple days.
+func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, numDays int, loc *time.Location) ([]Hour, error) {
+	// Check that arrays are not nil before validating lengths
+	if hourly.Time == nil {
+		return nil, fmt.Errorf("%w: hourly Time array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.WeatherCode == nil {
+		return nil, fmt.Errorf("%w: hourly WeatherCode array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.Temperature2M == nil {
+		return nil, fmt.Errorf("%w: hourly Temperature2M array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.ApparentTemperature == nil {
+		return nil, fmt.Errorf("%w: hourly ApparentTemperature array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.RelativeHumidity2M == nil {
+		return nil, fmt.Errorf("%w: hourly RelativeHumidity2M array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.Precipitation == nil {
+		return nil, fmt.Errorf("%w: hourly Precipitation array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.PrecipitationProbability == nil {
+		return nil, fmt.Errorf("%w: hourly PrecipitationProbability array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.WindSpeed10M == nil {
+		return nil, fmt.Errorf("%w: hourly WindSpeed10M array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.WindGusts10M == nil {
+		return nil, fmt.Errorf("%w: hourly WindGusts10M array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.WindDirection10M == nil {
+		return nil, fmt.Errorf("%w: hourly WindDirection10M array is nil", openmeteo.ErrUpstreamAPI)
+	}
+	if hourly.UVIndex == nil {
+		return nil, fmt.Errorf("%w: hourly UVIndex array is nil", openmeteo.ErrUpstreamAPI)
 	}
 
-	days := make([]Day, 0, maxDays)
-	for i := 0; i < maxDays && i < len(daily.Time); i++ {
-		day, err := s.mapDaily(daily, i, loc)
-		if err != nil {
-			return nil, err
-		}
-		days = append(days, day)
+	// Validate all hourly arrays have consistent lengths to prevent index out of range errors
+	expectedLen := len(hourly.Time)
+	if len(hourly.WeatherCode) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly WeatherCode array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.WeatherCode), expectedLen)
 	}
-	return days, nil
+	if len(hourly.Temperature2M) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly Temperature2M array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.Temperature2M), expectedLen)
+	}
+	if len(hourly.ApparentTemperature) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly ApparentTemperature array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.ApparentTemperature), expectedLen)
+	}
+	if len(hourly.RelativeHumidity2M) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly RelativeHumidity2M array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.RelativeHumidity2M), expectedLen)
+	}
+	if len(hourly.Precipitation) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly Precipitation array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.Precipitation), expectedLen)
+	}
+	if len(hourly.PrecipitationProbability) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly PrecipitationProbability array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.PrecipitationProbability), expectedLen)
+	}
+	if len(hourly.WindSpeed10M) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly WindSpeed10M array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.WindSpeed10M), expectedLen)
+	}
+	if len(hourly.WindGusts10M) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly WindGusts10M array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.WindGusts10M), expectedLen)
+	}
+	if len(hourly.WindDirection10M) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly WindDirection10M array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.WindDirection10M), expectedLen)
+	}
+	if len(hourly.UVIndex) != expectedLen {
+		return nil, fmt.Errorf("%w: hourly UVIndex array length %d does not match Time array length %d", openmeteo.ErrUpstreamAPI, len(hourly.UVIndex), expectedLen)
+	}
+
+	hours := make([]Hour, 0, numDays*24)
+	dateStr := startDate
+
+	for day := 0; day < numDays; day++ {
+		// Find the first index for the given date
+		dateIdx := -1
+		for i, t := range hourly.Time {
+			if len(t) >= 10 && t[:10] == dateStr {
+				dateIdx = i
+				break
+			}
+		}
+
+		if dateIdx == -1 {
+			return nil, fmt.Errorf("no hourly data found for date %q in forecast payload: %w", dateStr, openmeteo.ErrUpstreamAPI)
+		}
+
+		// Pre-allocate with estimated size for better performance - use dayHours for potential future use
+		_ = make([]Hour, 0, 24)
+		for i := dateIdx; i < len(hourly.Time); i++ {
+			// Skip entries that don't match the date (continue, not break, for sparse data)
+			if len(hourly.Time[i]) < 10 || hourly.Time[i][:10] != dateStr {
+				continue
+			}
+
+			// Parse time and extract HH:MM
+			// Open-Meteo API returns time without timezone offset, use local timezone from API response
+			t, err := time.ParseInLocation("2006-01-02T15:04", hourly.Time[i], loc)
+			if err != nil {
+				return nil, fmt.Errorf("%w: failed to parse hourly time %q at index %d: %v", openmeteo.ErrUpstreamAPI, hourly.Time[i], i, err)
+			}
+			timeStr := t.Format("15:04")
+
+			hours = append(hours, Hour{
+				Time:                     timeStr,
+				Weather:                  s.weatherMapper.GetDescription(hourly.WeatherCode[i]),
+				Temperature:              hourly.Temperature2M[i],
+				ApparentTemperature:      hourly.ApparentTemperature[i],
+				Humidity:                 hourly.RelativeHumidity2M[i],
+				Precipitation:            hourly.Precipitation[i],
+				PrecipitationProbability: hourly.PrecipitationProbability[i],
+				WindSpeed:                hourly.WindSpeed10M[i],
+				WindGusts:                hourly.WindGusts10M[i],
+				WindDirection:            hourly.WindDirection10M[i],
+				UVIndex:                  hourly.UVIndex[i],
+			})
+		}
+
+		// Move to the next day
+		dateStr = time.Now().AddDate(0, 0, day+1).Format("2006-01-02")
+	}
+
+	return hours, nil
 }
 
-// Week returns a 7-day forecast starting from today.
-func (s *Service) Week(lat, lon float64, units string) (*WeekOutput, error) {
+// fetchDailyForecast fetches daily forecast for the specified number of days (max 14).
+func (s *Service) fetchDailyForecast(lat, lon float64, units string, forecastDays int) (*DailyOutput, error) {
+	if forecastDays < 1 || forecastDays > 14 {
+		return nil, fmt.Errorf("daily forecast supports 1-14 days, got %d", forecastDays)
+	}
+
 	now := time.Now()
-	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", 7)
+	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", forecastDays)
 	if err != nil {
 		return nil, err
 	}
@@ -152,13 +213,13 @@ func (s *Service) Week(lat, lon float64, units string) (*WeekOutput, error) {
 		return nil, fmt.Errorf("%w: invalid timezone %q from API: %v", openmeteo.ErrUpstreamAPI, apiResp.Timezone, err)
 	}
 
-	// Map daily conditions for 7 days
-	days, err := s.mapWeekDaily(apiResp.Daily, 7, loc)
+	// Map daily conditions
+	days, err := s.mapWeekDaily(apiResp.Daily, forecastDays, loc)
 	if err != nil {
 		return nil, err
 	}
 
-	return &WeekOutput{
+	return &DailyOutput{
 		Meta: Meta{
 			GeneratedAt: now,
 			Units:       s.getUnits(units),
@@ -417,4 +478,24 @@ func (s *Service) getUnits(units string) Units {
 		PrecipitationProbability: "%",
 		UVIndex:                  "index",
 	}
+}
+
+// mapWeekDaily maps API daily data to output format.
+
+// mapWeekDaily maps API daily data to output format.
+// maxDays limits the number of days returned (typically 7 or 14).
+func (s *Service) mapWeekDaily(daily openmeteo.Daily, maxDays int, loc *time.Location) ([]Day, error) {
+	if len(daily.Time) < maxDays {
+		return nil, fmt.Errorf("upstream returned %d daily entries, expected %d: %w", len(daily.Time), maxDays, openmeteo.ErrUpstreamAPI)
+	}
+
+	days := make([]Day, 0, maxDays)
+	for i := 0; i < maxDays && i < len(daily.Time); i++ {
+		day, err := s.mapDaily(daily, i, loc)
+		if err != nil {
+			return nil, err
+		}
+		days = append(days, day)
+	}
+	return days, nil
 }

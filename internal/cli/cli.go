@@ -9,12 +9,13 @@ import (
 
 // Config holds all configuration for a CLI command execution.
 type Config struct {
-	Command string
-	Lat     float64
-	Lon     float64
-	Units   string
-	Format  string
-	DateStr string
+	Hourly      bool
+	Daily       bool
+	ForecastDays int
+	Lat         float64
+	Lon         float64
+	Units       string
+	Format      string
 }
 
 // ValidationError represents a validation error with exit code 3.
@@ -40,7 +41,7 @@ func HasHelpFlag(args []string) bool {
 		switch args[i] {
 		case "-h", "--help":
 			return true
-		case "--lat", "--lon", "--units", "--format", "--date":
+		case "--lat", "--lon", "--units", "--format", "--forecast-days":
 			if i+1 < len(args) {
 				i++
 			}
@@ -49,27 +50,32 @@ func HasHelpFlag(args []string) bool {
 	return false
 }
 
-// Parse parses command-line arguments for the given command.
-func Parse(command string, args []string) (*Config, error) {
+// Parse parses command-line arguments for the forecast command.
+func Parse(args []string) (*Config, error) {
 	if HasHelpFlag(args) {
 		cfg := &Config{
-			Command: command,
-			Lat:     0,
-			Lon:     0,
-			Units:   "metric",
-			Format:  "toon",
-			DateStr: "",
+			Hourly:       false,
+			Daily:        false,
+			ForecastDays: 1,
+			Lat:          0,
+			Lon:          0,
+			Units:        "metric",
+			Format:       "toon",
 		}
 		return cfg, nil
 	}
 
 	// Default values
 	var lat, lon float64
-	var units, format, dateStr string
-	var hasLat, hasLon, hasUnits, hasFormat, hasDate bool
+	var units, format string
+	var forecastDays int
+	var hourly, daily bool
+	var hasLat, hasLon, hasUnits, hasFormat, hasForecastDays bool
+	var hasHourly, hasDaily bool
 
 	units = "metric"
 	format = "toon"
+	forecastDays = 1
 
 	// Parse arguments manually
 	for i := 0; i < len(args); i++ {
@@ -115,12 +121,31 @@ func Parse(command string, args []string) (*Config, error) {
 			format = args[i+1]
 			hasFormat = true
 			i++
-		} else if args[i] == "--date" && i+1 < len(args) {
-			if hasDate {
-				return nil, &InvalidArgumentError{message: "duplicate flag: --date"}
+		} else if args[i] == "--hourly" {
+			if hasHourly {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --hourly"}
 			}
-			dateStr = args[i+1]
-			hasDate = true
+			hourly = true
+			hasHourly = true
+		} else if args[i] == "--daily" {
+			if hasDaily {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --daily"}
+			}
+			daily = true
+			hasDaily = true
+		} else if args[i] == "--forecast-days" && i+1 < len(args) {
+			if hasForecastDays {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --forecast-days"}
+			}
+			tmp, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, &InvalidArgumentError{message: "invalid forecast-days value"}
+			}
+			if tmp < 1 {
+				return nil, &InvalidArgumentError{message: "forecast-days must be at least 1"}
+			}
+			forecastDays = tmp
+			hasForecastDays = true
 			i++
 		} else if len(args[i]) > 0 && args[i][0] == '-' {
 			// Unknown flag - return error to help catch typos
@@ -134,6 +159,22 @@ func Parse(command string, args []string) (*Config, error) {
 	// Validate required parameters
 	if !hasLat || !hasLon {
 		return nil, &InvalidArgumentError{message: "lat and lon are required"}
+	}
+
+	// Validate that exactly one of --hourly or --daily is specified
+	if hasHourly && hasDaily {
+		return nil, &ValidationError{message: "cannot use both --hourly and --daily"}
+	}
+	if !hasHourly && !hasDaily {
+		return nil, &ValidationError{message: "must specify either --hourly or --daily"}
+	}
+
+	// Validate forecast-days limits
+	if hourly && forecastDays > 2 {
+		return nil, &ValidationError{message: "--hourly supports maximum 2 days"}
+	}
+	if daily && forecastDays > 14 {
+		return nil, &ValidationError{message: "--daily supports maximum 14 days"}
 	}
 
 	if lat < -90 || lat > 90 {
@@ -153,12 +194,13 @@ func Parse(command string, args []string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Command: command,
-		Lat:     lat,
-		Lon:     lon,
-		Units:   units,
-		Format:  format,
-		DateStr: dateStr,
+		Hourly:       hourly,
+		Daily:        daily,
+		ForecastDays: forecastDays,
+		Lat:          lat,
+		Lon:          lon,
+		Units:        units,
+		Format:       format,
 	}
 
 	return cfg, nil

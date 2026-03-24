@@ -12,23 +12,32 @@ Use the default output unless another tool needs machine-readable JSON. Add `--f
 ## Commands
 
 ```bash
-openmeteo-cli today --lat <latitude> --lon <longitude>
-openmeteo-cli day --lat <latitude> --lon <longitude> --date YYYY-MM-DD
-openmeteo-cli week --lat <latitude> --lon <longitude>
+# Hourly forecast (max 2 days)
+openmeteo-cli forecast --lat <latitude> --lon <longitude> --hourly [--forecast-days 1|2]
+
+# Daily forecast (max 14 days)
+openmeteo-cli forecast --lat <latitude> --lon <longitude> --daily [--forecast-days 1-14]
 ```
 
 ## Guidance
 
-- Use `today` for current conditions plus hourly rows for the local date.
-- Use `day` when the caller already knows the exact date.
-- Use `week` for a compact seven-day summary.
+- Use `--hourly` for hourly forecast data (maximum 2 days).
+- Use `--daily` for daily forecast data (maximum 14 days).
 - Add `--units imperial` only when the caller explicitly wants Fahrenheit and mph.
 - Add `--format json` only when another tool needs machine-readable output.
 
 ## Examples
 
 ```bash
-openmeteo-cli today --lat 40.7128 --lon -74.0060
-openmeteo-cli day --lat 34.0522 --lon -118.2437 --date 2026-04-15
-openmeteo-cli week --lat 51.5074 --lon -0.1278 --units metric
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --forecast-days 2
+openmeteo-cli forecast --lat 34.0522 --lon -118.2437 --daily --forecast-days 7
+openmeteo-cli forecast --lat 51.5074 --lon -0.1278 --daily --forecast-days 14 --units metric
 ```
+
+## Validation Rules
+
+- Exactly one of `--hourly` or `--daily` is required
+- `--hourly` supports maximum 2 days
+- `--daily` supports maximum 14 days
+- `--forecast-days` defaults to 1 if not specified

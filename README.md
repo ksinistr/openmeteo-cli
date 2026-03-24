@@ -47,86 +47,90 @@ The binary will be created at `bin/openmeteo-cli`.
 
 ## Commands
 
-- `today` - Get today's weather forecast with hourly rows
-- `day` - Get weather forecast for a specific date
-- `week` - Get a 7-day weather forecast
+- `forecast` - Get weather forecast (hourly or daily)
 
 ## Usage
 
 ```bash
-openmeteo-cli today --lat <latitude> --lon <longitude> [options]
-openmeteo-cli day --lat <latitude> --lon <longitude> --date YYYY-MM-DD [options]
-openmeteo-cli week --lat <latitude> --lon <longitude> [options]
+# Hourly forecast (max 2 days)
+openmeteo-cli forecast --lat <latitude> --lon <longitude> --hourly [--forecast-days 1|2]
+
+# Daily forecast (max 14 days)
+openmeteo-cli forecast --lat <latitude> --lon <longitude> --daily [--forecast-days 1-14]
 ```
 
 ## Help
 
-Show help message for the binary or a specific command:
+Show help message:
 
 ```bash
 openmeteo-cli -h
 openmeteo-cli --help
-openmeteo-cli today -h
-openmeteo-cli week --help
+openmeteo-cli forecast --help
 ```
 
 ## Options
 
 - `--lat <float>` - Latitude coordinate (required, -90 to 90)
 - `--lon <float>` - Longitude coordinate (required, -180 to 180)
-- `--date YYYY-MM-DD` - Date for the day command (required for `day` command)
+- `--hourly` - Get hourly forecast (max 2 days, mutually exclusive with --daily)
+- `--daily` - Get daily forecast (max 14 days, mutually exclusive with --hourly)
+- `--forecast-days <int>` - Number of days to forecast (default: 1)
 - `--units metric|imperial` - Units: metric (default) or imperial
 - `--format toon|json` - Output format: toon (default) or json
 
 ## Examples
 
-### Today's weather for New York City
+### Hourly forecast for New York City
 ```bash
-openmeteo-cli today --lat 40.7128 --lon -74.0060
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly
 ```
 
-### Weather for a specific date
+### 2-day hourly forecast
 ```bash
-openmeteo-cli day --lat 40.7128 --lon -74.0060 --date 2026-03-22
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --forecast-days 2
 ```
 
-### 7-day forecast with imperial units
+### 7-day daily forecast with imperial units
 ```bash
-openmeteo-cli week --lat 40.7128 --lon -74.0060 --units imperial
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --daily --forecast-days 7 --units imperial
 ```
 
-### JSON output for debugging
+### JSON output for programmatic use
 ```bash
-openmeteo-cli today --lat 40.7128 --lon -74.0060 --format json
+openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --format json
 ```
 
 ### Using different locations
 
 **London, UK:**
 ```bash
-openmeteo-cli today --lat 51.5074 --lon -0.1278
-openmeteo-cli week --lat 51.5074 --lon -0.1278 --units metric
+openmeteo-cli forecast --lat 51.5074 --lon -0.1278 --hourly
+openmeteo-cli forecast --lat 51.5074 --lon -0.1278 --daily --forecast-days 7
 ```
 
 **Tokyo, Japan:**
 ```bash
-openmeteo-cli today --lat 35.6762 --lon 139.6503
+openmeteo-cli forecast --lat 35.6762 --lon 139.6503 --hourly
 ```
 
 **Sydney, Australia:**
 ```bash
-openmeteo-cli week --lat -33.8688 --lon 151.2093 --units imperial
-```
-
-### Getting hourly forecast for a past or future date
-```bash
-openmeteo-cli day --lat 34.0522 --lon -118.2437 --date 2026-04-15
+openmeteo-cli forecast --lat -33.8688 --lon 151.2093 --daily --forecast-days 14 --units imperial
 ```
 
 ## Defaults
 
 - Units: `metric`
 - Format: `toon`
+- Forecast days: `1`
+
+## Validation Rules
+
+- Exactly one of `--hourly` or `--daily` is required
+- `--hourly` supports maximum 2 days
+- `--daily` supports maximum 14 days
+- `--forecast-days` must be at least 1
 
 ## Output Format Notes
 
@@ -166,9 +170,9 @@ Example:
     },
     ...
   },
-  "current": {
+  "hours": [
     ...
-  }
+  ]
 }
 ```
 
@@ -179,33 +183,24 @@ Example:
 #### Syntax
 
 ```bash
-openmeteo-cli <command> --lat <float> --lon <float> [options]
+openmeteo-cli forecast --lat <float> --lon <float> (--hourly | --daily) [options]
 ```
-
-#### Commands
-
-| Command | Description | Required Options | Optional Options |
-|---------|-------------|------------------|------------------|
-| `today` | Get today's forecast with hourly rows | `--lat`, `--lon` | `--units`, `--format` |
-| `day` | Get forecast for a specific date | `--lat`, `--lon`, `--date` | `--units`, `--format` |
-| `week` | Get 7-day forecast | `--lat`, `--lon` | `--units`, `--format` |
 
 #### Required Options
 
 - `--lat <float>`: Latitude coordinate (must be between -90 and 90)
 - `--lon <float>`: Longitude coordinate (must be between -180 and 180)
-- `--date YYYY-MM-DD`: Required only for the `day` command
+- `--hourly` or `--daily`: Exactly one must be specified
 
 #### Optional Options
 
+- `--forecast-days <int>`: Number of days (default: 1)
 - `--units metric|imperial`: Weather units (default: `metric`)
 - `--format toon|json`: Output format (default: `toon`)
 
 ### Output Schema
 
-All commands return a consistent structure with command-specific data.
-
-#### Meta Object (all commands)
+#### Meta Object (all outputs)
 Metadata about the forecast generation and location.
 
 ```json
@@ -218,7 +213,7 @@ Metadata about the forecast generation and location.
 }
 ```
 
-#### Units Object (all commands)
+#### Units Object (all outputs)
 Units for all numeric fields in the response.
 
 ```json
@@ -233,46 +228,8 @@ Units for all numeric fields in the response.
 }
 ```
 
-#### Current Object (today command)
-Current weather conditions.
-
-```json
-{
-  "time": "14:30",
-  "weather": "Mainly clear",
-  "temperature": 12.5,
-  "apparent_temperature": 10.2,
-  "humidity": 65,
-  "precipitation": 0.0,
-  "precipitation_probability": 10,
-  "wind_speed": 15.3,
-  "wind_gusts": 22.1,
-  "wind_direction": 245,
-  "uv_index": 3.2
-}
-```
-
-#### Day Object (day command)
-Daily summary for the requested date.
-
-```json
-{
-  "date": "2026-03-22",
-  "weather": "Partly cloudy",
-  "temp_min": 8.1,
-  "temp_max": 16.3,
-  "precipitation_sum": 2.5,
-  "precipitation_probability_max": 30,
-  "wind_speed_max": 18.7,
-  "wind_gusts_max": 25.4,
-  "uv_index_max": 4.1,
-  "sunrise": "2026-03-22T06:30:00Z",
-  "sunset": "2026-03-22T19:45:00Z"
-}
-```
-
-#### Hours Array (today and day commands)
-Hourly forecast rows for the requested local date.
+#### Hour Object (hourly output)
+Hourly forecast entry.
 
 ```json
 {
@@ -290,8 +247,8 @@ Hourly forecast rows for the requested local date.
 }
 ```
 
-#### Days Array (week command)
-7 daily forecast rows starting from the current local date.
+#### Day Object (daily output)
+Daily forecast entry.
 
 ```json
 {
@@ -349,16 +306,8 @@ Unknown codes are reported as `Unknown weather code: <code>`.
 ### Time Formatting
 
 - `generated_at`: Full ISO 8601 timestamp (e.g., `2026-03-21T14:30:00Z`)
-- `sunrise`/`sunset` (day/week): Full local ISO 8601 timestamps
+- `sunrise`/`sunset` (daily): Full local ISO 8601 timestamps
 - `time` (hourly rows): Local time as `HH:MM` (e.g., `14:30`)
-
-### Date Filtering Rules
-
-- `today`: Returns hourly rows for the current local forecast date based on the location's timezone
-- `day`: Returns hourly rows for the requested local date
-- `week`: Returns exactly 7 consecutive daily rows starting from the current local date
-
-**Note:** DST transitions may result in 23 or 25 hourly rows for a local day instead of 24.
 
 ## Exit Codes
 
@@ -366,7 +315,7 @@ Unknown codes are reported as `Unknown weather code: <code>`.
 |------|-------------|
 | 0 | Success |
 | 2 | Invalid arguments (missing required options, invalid flag format) |
-| 3 | Validation error (lat/lon out of range, invalid units/format, invalid date format) |
+| 3 | Validation error (lat/lon out of range, invalid units/format, missing --hourly/--daily) |
 | 4 | Upstream API error (network issue, Open-Meteo API error) |
 | 5 | Requested date unavailable (date outside forecast range) |
 | 6 | Output encoding error |

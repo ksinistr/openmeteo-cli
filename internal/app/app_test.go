@@ -45,26 +45,28 @@ func TestRunExitCodes(t *testing.T) {
 		wantExitCode int
 	}{
 		// Exit code 2: invalid arguments
-		{"invalid lat format", []string{"today", "--lat", "not-a-number", "--lon", "0"}, 2},
-		{"invalid lon format", []string{"today", "--lat", "0", "--lon", "not-a-number"}, 2},
-		{"missing lat", []string{"today", "--lon", "0"}, 2},
-		{"missing lon", []string{"today", "--lat", "0"}, 2},
-		{"missing both lat and lon", []string{"today"}, 2},
-		{"invalid units format", []string{"today", "--lat", "0", "--lon", "0", "--units", "celsius"}, 3},
-		{"invalid format format", []string{"today", "--lat", "0", "--lon", "0", "--format", "xml"}, 3},
+		{"invalid lat format", []string{"forecast", "--lat", "not-a-number", "--lon", "0", "--hourly"}, 2},
+		{"invalid lon format", []string{"forecast", "--lat", "0", "--lon", "not-a-number", "--daily"}, 2},
+		{"missing lat", []string{"forecast", "--lon", "0", "--hourly"}, 2},
+		{"missing lon", []string{"forecast", "--lat", "0", "--hourly"}, 2},
+		{"missing both lat and lon", []string{"forecast", "--hourly"}, 2},
+		{"invalid units format", []string{"forecast", "--lat", "0", "--lon", "0", "--hourly", "--units", "celsius"}, 3},
+		{"invalid format format", []string{"forecast", "--lat", "0", "--lon", "0", "--hourly", "--format", "xml"}, 3},
 
 		// Exit code 3: validation errors
-		{"latitude too high", []string{"today", "--lat", "91", "--lon", "0"}, 3},
-		{"latitude too low", []string{"today", "--lat", "-91", "--lon", "0"}, 3},
-		{"longitude too high", []string{"today", "--lat", "0", "--lon", "181"}, 3},
-		{"longitude too low", []string{"today", "--lat", "0", "--lon", "-181"}, 3},
-		{"invalid units", []string{"today", "--lat", "40", "--lon", "-74", "--units", "imperial_fahrenheit"}, 3},
-		{"invalid format", []string{"today", "--lat", "40", "--lon", "-74", "--format", "json_lines"}, 3},
-		{"day missing date", []string{"day", "--lat", "40", "--lon", "-74"}, 3},
-		{"day invalid date", []string{"day", "--lat", "40", "--lon", "-74", "--date", "2026-13-45"}, 3},
+		{"latitude too high", []string{"forecast", "--lat", "91", "--lon", "0", "--hourly"}, 3},
+		{"latitude too low", []string{"forecast", "--lat", "-91", "--lon", "0", "--hourly"}, 3},
+		{"longitude too high", []string{"forecast", "--lat", "0", "--lon", "181", "--hourly"}, 3},
+		{"longitude too low", []string{"forecast", "--lat", "0", "--lon", "-181", "--hourly"}, 3},
+		{"invalid units", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--units", "imperial_fahrenheit"}, 3},
+		{"invalid format", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--format", "json_lines"}, 3},
+		{"no mode specified", []string{"forecast", "--lat", "40", "--lon", "-74"}, 3},
+		{"both modes specified", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--daily"}, 3},
+		{"hourly exceeds max days", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--forecast-days", "3"}, 3},
+		{"daily exceeds max days", []string{"forecast", "--lat", "40", "--lon", "-74", "--daily", "--forecast-days", "15"}, 3},
 
 		// Unknown command - exit 2
-		{"unknown command", []string{"forecast", "--lat", "40", "--lon", "-74"}, 2},
+		{"unknown command", []string{"today", "--lat", "40", "--lon", "-74"}, 2},
 	}
 
 	for _, tt := range tests {
@@ -98,8 +100,8 @@ func TestRunEmptyArgs(t *testing.T) {
 	if !strings.Contains(stderr, "Error: no command specified") {
 		t.Errorf("Run([]) stderr = %q, want to contain 'Error: no command specified'", stderr)
 	}
-	if !strings.Contains(stderr, "Commands:") {
-		t.Errorf("Run([]) stderr = %q, want to contain full root help", stderr)
+	if !strings.Contains(stderr, "Usage: openmeteo-cli forecast") {
+		t.Errorf("Run([]) stderr = %q, want to contain 'Usage: openmeteo-cli forecast'", stderr)
 	}
 }
 
@@ -109,8 +111,6 @@ func TestRunNoCommand(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	// Note: With "--lat" as first arg, the code treats it as command name and "--lat"
-	// becomes an argument to check for lat/lon - which fails validation
 	exitCode := Run([]string{"--lat", "40", "--lon", "-74"})
 
 	_ = w.Close()
@@ -142,21 +142,22 @@ func mockOpenMeteoServer() *httptest.Server {
 		now := time.Now().UTC()
 		today := now.Format("2006-01-02")
 
-		// Generate 7 daily entries for week command support
-		dailyTimes := make([]string, 7)
-		dailySunrises := make([]string, 7)
-		dailySunsets := make([]string, 7)
-		dailyWeatherCodes := make([]int, 7)
-		dailyTempMaxs := make([]float64, 7)
-		dailyTempMins := make([]float64, 7)
-		dailyPrecipSums := make([]float64, 7)
-		dailyPrecipProbMaxs := make([]int, 7)
-		dailyWindSpeedMaxs := make([]float64, 7)
-		dailyWindGustsMaxs := make([]float64, 7)
-		dailyUVIndexMaxs := make([]float64, 7)
+		// Generate 14 daily entries for daily command support
+		dailyCount := 14
+		dailyTimes := make([]string, dailyCount)
+		dailySunrises := make([]string, dailyCount)
+		dailySunsets := make([]string, dailyCount)
+		dailyWeatherCodes := make([]int, dailyCount)
+		dailyTempMaxs := make([]float64, dailyCount)
+		dailyTempMins := make([]float64, dailyCount)
+		dailyPrecipSums := make([]float64, dailyCount)
+		dailyPrecipProbMaxs := make([]int, dailyCount)
+		dailyWindSpeedMaxs := make([]float64, dailyCount)
+		dailyWindGustsMaxs := make([]float64, dailyCount)
+		dailyUVIndexMaxs := make([]float64, dailyCount)
 
 		// Generate hourly entries for the first 2 days (today and tomorrow)
-		// This provides sufficient data for testing today/day commands
+		// This provides sufficient data for testing hourly command
 		var hourlyTimes []string
 		var hourlyTemps []float64
 		var hourlyApparentTemps []float64
@@ -172,7 +173,7 @@ func mockOpenMeteoServer() *httptest.Server {
 		for day := 0; day < 2; day++ {
 			date := now.AddDate(0, 0, day)
 			dateStr := date.Format("2006-01-02")
-			// Add a few hourly entries for each day
+			// Add hourly entries for each day
 			for hour := 0; hour < 24; hour += 12 {
 				hourlyTimes = append(hourlyTimes, fmt.Sprintf("%sT%02d:00", dateStr, hour))
 				hourlyTemps = append(hourlyTemps, 10.0+float64(hour))
@@ -188,7 +189,7 @@ func mockOpenMeteoServer() *httptest.Server {
 			}
 		}
 
-		for i := 0; i < 7; i++ {
+		for i := 0; i < dailyCount; i++ {
 			date := now.AddDate(0, 0, i)
 			dateStr := date.Format("2006-01-02")
 			dailyTimes[i] = dateStr
@@ -261,18 +262,15 @@ func TestRunCommandDispatch(t *testing.T) {
 	server := mockOpenMeteoServer()
 	defer server.Close()
 
-	// Use a date relative to now to ensure test remains valid over time
-	// The mock server generates 7 days starting from time.Now().UTC()
-	testDate := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
-
 	testCases := []struct {
 		name string
 		args []string
 		want int // expected exit code
 	}{
-		{"today dispatch", []string{"today", "--lat", "40.7128", "--lon", "-74.0060"}, 0},
-		{"day dispatch", []string{"day", "--lat", "40.7128", "--lon", "-74.0060", "--date", testDate}, 0},
-		{"week dispatch", []string{"week", "--lat", "40.7128", "--lon", "-74.0060"}, 0},
+		{"hourly dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "1"}, 0},
+		{"hourly 2 days dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "2"}, 0},
+		{"daily dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "7"}, 0},
+		{"daily 14 days dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "14"}, 0},
 	}
 
 	for _, tt := range testCases {
@@ -280,36 +278,18 @@ func TestRunCommandDispatch(t *testing.T) {
 			if len(tt.args) == 0 {
 				t.Fatal("no command provided")
 			}
-			command := tt.args[0]
 			commandArgs := tt.args[1:]
 
 			// Parse args to get config (same as Run does)
-			cfg, err := cli.Parse(command, commandArgs)
+			cfg, err := cli.Parse(commandArgs)
 			if err != nil {
 				t.Fatalf("cli.Parse failed: %v", err)
-			}
-
-			// Apply command-specific validation (same as in Run)
-			if command == "day" && cfg.DateStr == "" {
-				t.Fatal("date is required for day command")
-			}
-			if command != "day" && cfg.DateStr != "" {
-				t.Fatal("--date flag is only valid for day command")
-			}
-
-			// Parse date for day command
-			var date time.Time
-			if cfg.DateStr != "" {
-				date, err = time.Parse("2006-01-02", cfg.DateStr)
-				if err != nil {
-					t.Fatalf("date parsing failed: %v", err)
-				}
 			}
 
 			// Now actually test the dispatch by calling runWithClient with mock server
 			// This tests the actual switch statement in runWithClient
 			mockClient := &mockHTTPClient{serverURL: server.URL}
-			exitCode := runWithClient(cfg, date, command, mockClient)
+			exitCode := runWithClient(cfg, mockClient)
 
 			if exitCode != tt.want {
 				t.Errorf("runWithClient() exit code = %d, want %d", exitCode, tt.want)
@@ -324,9 +304,9 @@ func TestRunValidatesArgsBeforeDispatch(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"invalid lat format", []string{"today", "--lat", "abc", "--lon", "0"}},
-		{"lat out of range", []string{"today", "--lat", "100", "--lon", "0"}},
-		{"day missing date", []string{"day", "--lat", "40", "--lon", "-74"}},
+		{"invalid lat format", []string{"forecast", "--lat", "abc", "--lon", "0", "--hourly"}},
+		{"lat out of range", []string{"forecast", "--lat", "100", "--lon", "0", "--hourly"}},
+		{"no mode", []string{"forecast", "--lat", "40", "--lon", "-74"}},
 	}
 
 	for _, tt := range tests {
@@ -362,9 +342,11 @@ func TestRunValidationErrorExitCode(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"lat out of range", []string{"today", "--lat", "100", "--lon", "0"}, 3},
-		{"lon out of range", []string{"today", "--lat", "40", "--lon", "200"}, 3},
-		{"invalid units", []string{"today", "--lat", "40", "--lon", "0", "--units", "invalid"}, 3},
+		{"lat out of range", []string{"forecast", "--lat", "100", "--lon", "0", "--hourly"}, 3},
+		{"lon out of range", []string{"forecast", "--lat", "40", "--lon", "200", "--hourly"}, 3},
+		{"invalid units", []string{"forecast", "--lat", "40", "--lon", "0", "--hourly", "--units", "invalid"}, 3},
+		{"no mode", []string{"forecast", "--lat", "40", "--lon", "0"}, 3},
+		{"both modes", []string{"forecast", "--lat", "40", "--lon", "0", "--hourly", "--daily"}, 3},
 	}
 
 	for _, tt := range tests {
@@ -384,10 +366,9 @@ func TestRunInvalidArgumentExitCode(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"missing lat/lon", []string{"today"}, 2},
-		{"invalid lat format", []string{"today", "--lat", "abc", "--lon", "0"}, 2},
-		{"invalid lon format", []string{"today", "--lat", "0", "--lon", "xyz"}, 2},
-		{"unknown command", []string{"forecast", "--lat", "0", "--lon", "0"}, 2},
+		{"missing lat/lon", []string{"forecast", "--hourly"}, 2},
+		{"invalid lat format", []string{"forecast", "--lat", "abc", "--lon", "0", "--hourly"}, 2},
+		{"invalid lon format", []string{"forecast", "--lat", "0", "--lon", "xyz", "--hourly"}, 2},
 	}
 
 	for _, tt := range tests {
@@ -409,17 +390,13 @@ func TestRunHelpFlags(t *testing.T) {
 		wantOutput   string
 	}{
 		// Root help
-		{"root -h", []string{"-h"}, 0, "Usage: openmeteo-cli (today|day|week)"},
-		{"root --help", []string{"--help"}, 0, "Usage: openmeteo-cli (today|day|week)"},
+		{"root -h", []string{"-h"}, 0, "Usage: openmeteo-cli forecast"},
+		{"root --help", []string{"--help"}, 0, "Usage: openmeteo-cli forecast"},
 		// Command help
-		{"today -h", []string{"today", "-h"}, 0, "Usage: openmeteo-cli today"},
-		{"today --help", []string{"today", "--help"}, 0, "Usage: openmeteo-cli today"},
-		{"day -h", []string{"day", "-h"}, 0, "Usage: openmeteo-cli day"},
-		{"day --help", []string{"day", "--help"}, 0, "Usage: openmeteo-cli day"},
-		{"week -h", []string{"week", "-h"}, 0, "Usage: openmeteo-cli week"},
-		{"week --help", []string{"week", "--help"}, 0, "Usage: openmeteo-cli week"},
-		// Help flag in different position (today)
-		{"today with lat lon and --help", []string{"today", "--lat", "40", "--lon", "-74", "--help"}, 0, "Usage: openmeteo-cli today"},
+		{"forecast -h", []string{"forecast", "-h"}, 0, "Usage: openmeteo-cli forecast"},
+		{"forecast --help", []string{"forecast", "--help"}, 0, "Usage: openmeteo-cli forecast"},
+		{"forecast hourly -h", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "-h"}, 0, "Usage: openmeteo-cli forecast"},
+		{"forecast daily --help", []string{"forecast", "--lat", "40", "--lon", "-74", "--daily", "--help"}, 0, "Usage: openmeteo-cli forecast"},
 	}
 
 	for _, tt := range tests {
@@ -455,20 +432,14 @@ func TestRunDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 		wantStdErr   string
 	}{
 		{
-			name:         "day date value help token returns date error",
-			args:         []string{"day", "--lat", "40", "--lon", "-74", "--date", "--help"},
-			wantExitCode: 3,
-			wantStdErr:   "Error: invalid date format",
-		},
-		{
 			name:         "units value help token returns validation error",
-			args:         []string{"today", "--lat", "40", "--lon", "-74", "--units", "--help"},
+			args:         []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--units", "--help"},
 			wantExitCode: 3,
 			wantStdErr:   "Error: units must be 'metric' or 'imperial'",
 		},
 		{
 			name:         "lat value help token returns parse error",
-			args:         []string{"today", "--lat", "-h", "--lon", "-74"},
+			args:         []string{"forecast", "--lat", "-h", "--lon", "-74", "--hourly"},
 			wantExitCode: 2,
 			wantStdErr:   "Error: invalid lat value",
 		},
