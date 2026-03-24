@@ -12,49 +12,46 @@ import (
 	"openmeteo-cli/internal/weathercode"
 )
 
-const usageRoot = `Usage: openmeteo-cli forecast [options]
+const usageRoot = `Usage: openmeteo-cli <command> [options]
 
 Commands:
-  forecast  Get weather forecast
+  hourly  Get hourly weather forecast
+  daily   Get daily weather forecast
 
 Options:
-  --lat <float>           Latitude coordinate (required, -90 to 90)
-  --lon <float>           Longitude coordinate (required, -180 to 180)
-  --hourly                Get hourly forecast (max 2 days)
-  --daily                 Get daily forecast (max 14 days)
-  --forecast-days <int>   Number of days to forecast (default: 1)
+  --latitude <float>      Latitude coordinate (required, -90 to 90)
+  --longitude <float>     Longitude coordinate (required, -180 to 180)
+  --forecast-days <int>   Number of days to forecast (required)
   --units metric|imperial Units: metric (default) or imperial
   --format toon|json      Output format: toon (default) or json
   -h, --help              Show this help message
 
 Examples:
-  openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --forecast-days 1
-  openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --daily --forecast-days 7
+  openmeteo-cli hourly --latitude 40.7128 --longitude -74.0060 --forecast-days 1
+  openmeteo-cli daily --latitude 40.7128 --longitude -74.0060 --forecast-days 7
 `
 
-const usageHourly = `Usage: openmeteo-cli forecast --lat <float> --lon <float> --hourly [options]
+const usageHourly = `Usage: openmeteo-cli hourly --latitude <float> --longitude <float> [options]
 
 Get hourly weather forecast
 
 Options:
-  --lat <float>           Latitude coordinate (required, -90 to 90)
-  --lon <float>           Longitude coordinate (required, -180 to 180)
-  --hourly                Get hourly forecast (max 2 days)
-  --forecast-days <int>   Number of days to forecast (default: 1, max: 2)
+  --latitude <float>      Latitude coordinate (required, -90 to 90)
+  --longitude <float>     Longitude coordinate (required, -180 to 180)
+  --forecast-days <int>   Number of days to forecast (required, 1-2)
   --units metric|imperial Units: metric (default) or imperial
   --format toon|json      Output format: toon (default) or json
   -h, --help              Show this help message
 `
 
-const usageDaily = `Usage: openmeteo-cli forecast --lat <float> --lon <float> --daily [options]
+const usageDaily = `Usage: openmeteo-cli daily --latitude <float> --longitude <float> [options]
 
 Get daily weather forecast
 
 Options:
-  --lat <float>           Latitude coordinate (required, -90 to 90)
-  --lon <float>           Longitude coordinate (required, -180 to 180)
-  --daily                 Get daily forecast (max 14 days)
-  --forecast-days <int>   Number of days to forecast (default: 1, max: 14)
+  --latitude <float>      Latitude coordinate (required, -90 to 90)
+  --longitude <float>     Longitude coordinate (required, -180 to 180)
+  --forecast-days <int>   Number of days to forecast (required, 1-14)
   --units metric|imperial Units: metric (default) or imperial
   --format toon|json      Output format: toon (default) or json
   -h, --help              Show this help message
@@ -77,20 +74,24 @@ func Run(args []string) int {
 	command := args[0]
 	commandArgs := args[1:]
 
-	// Check for help flags on command-specific paths
-	if command == "forecast" && cli.HasHelpFlag(commandArgs) {
-		fmt.Print(usageRoot)
-		return 0
-	}
-
 	// Validate command before doing any other parsing
-	if command != "forecast" {
+	if command != "hourly" && command != "daily" {
 		fmt.Fprintf(os.Stderr, "Error: unknown command %q\n", command)
-		fmt.Fprintln(os.Stderr, "Valid command: forecast")
+		fmt.Fprintln(os.Stderr, "Valid commands: hourly, daily")
 		return 2
 	}
 
-	cfg, err := cli.Parse(commandArgs)
+	// Check for help flags on command-specific paths
+	if cli.HasHelpFlag(commandArgs) {
+		if command == "hourly" {
+			fmt.Print(usageHourly)
+		} else {
+			fmt.Print(usageDaily)
+		}
+		return 0
+	}
+
+	cfg, err := cli.Parse(commandArgs, command)
 	if err != nil {
 		// Check for validation errors (exit 3) vs invalid argument errors (exit 2)
 		var ve *cli.ValidationError
@@ -122,11 +123,11 @@ func runWithClient(cfg *cli.Config, httpClient openmeteo.HTTPClient) int {
 	var result interface{}
 	var errResult error
 
-	// Route based on --hourly/--daily flag
-	if cfg.Hourly {
-		result, errResult = fcService.Forecast(cfg.Lat, cfg.Lon, cfg.Units, true, cfg.ForecastDays)
-	} else if cfg.Daily {
-		result, errResult = fcService.Forecast(cfg.Lat, cfg.Lon, cfg.Units, false, cfg.ForecastDays)
+	// Route based on mode
+	if cfg.Mode == "hourly" {
+		result, errResult = fcService.Forecast(cfg.Latitude, cfg.Longitude, cfg.Units, true, cfg.ForecastDays)
+	} else {
+		result, errResult = fcService.Forecast(cfg.Latitude, cfg.Longitude, cfg.Units, false, cfg.ForecastDays)
 	}
 
 	if errResult != nil {

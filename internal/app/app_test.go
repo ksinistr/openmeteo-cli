@@ -45,28 +45,28 @@ func TestRunExitCodes(t *testing.T) {
 		wantExitCode int
 	}{
 		// Exit code 2: invalid arguments
-		{"invalid lat format", []string{"forecast", "--lat", "not-a-number", "--lon", "0", "--hourly"}, 2},
-		{"invalid lon format", []string{"forecast", "--lat", "0", "--lon", "not-a-number", "--daily"}, 2},
-		{"missing lat", []string{"forecast", "--lon", "0", "--hourly"}, 2},
-		{"missing lon", []string{"forecast", "--lat", "0", "--hourly"}, 2},
-		{"missing both lat and lon", []string{"forecast", "--hourly"}, 2},
-		{"invalid units format", []string{"forecast", "--lat", "0", "--lon", "0", "--hourly", "--units", "celsius"}, 3},
-		{"invalid format format", []string{"forecast", "--lat", "0", "--lon", "0", "--hourly", "--format", "xml"}, 3},
+		{"invalid latitude format", []string{"hourly", "--latitude", "not-a-number", "--longitude", "0", "--forecast-days", "1"}, 2},
+		{"invalid longitude format", []string{"daily", "--latitude", "0", "--longitude", "not-a-number", "--forecast-days", "1"}, 2},
+		{"missing latitude", []string{"hourly", "--longitude", "0", "--forecast-days", "1"}, 3},
+		{"missing longitude", []string{"daily", "--latitude", "0", "--forecast-days", "1"}, 3},
+		{"missing both latitude and longitude", []string{"hourly", "--forecast-days", "1"}, 3},
+		{"invalid units format", []string{"hourly", "--latitude", "0", "--longitude", "0", "--forecast-days", "1", "--units", "celsius"}, 3},
+		{"invalid format format", []string{"daily", "--latitude", "0", "--longitude", "0", "--forecast-days", "1", "--format", "xml"}, 3},
 
 		// Exit code 3: validation errors
-		{"latitude too high", []string{"forecast", "--lat", "91", "--lon", "0", "--hourly"}, 3},
-		{"latitude too low", []string{"forecast", "--lat", "-91", "--lon", "0", "--hourly"}, 3},
-		{"longitude too high", []string{"forecast", "--lat", "0", "--lon", "181", "--hourly"}, 3},
-		{"longitude too low", []string{"forecast", "--lat", "0", "--lon", "-181", "--hourly"}, 3},
-		{"invalid units", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--units", "imperial_fahrenheit"}, 3},
-		{"invalid format", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--format", "json_lines"}, 3},
-		{"no mode specified", []string{"forecast", "--lat", "40", "--lon", "-74"}, 3},
-		{"both modes specified", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--daily"}, 3},
-		{"hourly exceeds max days", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--forecast-days", "3"}, 3},
-		{"daily exceeds max days", []string{"forecast", "--lat", "40", "--lon", "-74", "--daily", "--forecast-days", "15"}, 3},
+		{"latitude too high", []string{"hourly", "--latitude", "91", "--longitude", "0", "--forecast-days", "1"}, 3},
+		{"latitude too low", []string{"daily", "--latitude", "-91", "--longitude", "0", "--forecast-days", "1"}, 3},
+		{"longitude too high", []string{"hourly", "--latitude", "0", "--longitude", "181", "--forecast-days", "1"}, 3},
+		{"longitude too low", []string{"daily", "--latitude", "0", "--longitude", "-181", "--forecast-days", "1"}, 3},
+		{"invalid units", []string{"hourly", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1", "--units", "imperial_fahrenheit"}, 3},
+		{"invalid format", []string{"daily", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1", "--format", "json_lines"}, 3},
+		{"missing forecast-days", []string{"hourly", "--latitude", "40", "--longitude", "-74"}, 3},
+		{"hourly exceeds max days", []string{"hourly", "--latitude", "40", "--longitude", "-74", "--forecast-days", "3"}, 3},
+		{"daily exceeds max days", []string{"daily", "--latitude", "40", "--longitude", "-74", "--forecast-days", "15"}, 3},
 
 		// Unknown command - exit 2
-		{"unknown command", []string{"today", "--lat", "40", "--lon", "-74"}, 2},
+		{"unknown command", []string{"forecast", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1"}, 2},
+		{"unknown command 2", []string{"today", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1"}, 2},
 	}
 
 	for _, tt := range tests {
@@ -100,8 +100,8 @@ func TestRunEmptyArgs(t *testing.T) {
 	if !strings.Contains(stderr, "Error: no command specified") {
 		t.Errorf("Run([]) stderr = %q, want to contain 'Error: no command specified'", stderr)
 	}
-	if !strings.Contains(stderr, "Usage: openmeteo-cli forecast") {
-		t.Errorf("Run([]) stderr = %q, want to contain 'Usage: openmeteo-cli forecast'", stderr)
+	if !strings.Contains(stderr, "Usage: openmeteo-cli") {
+		t.Errorf("Run([]) stderr = %q, want to contain 'Usage: openmeteo-cli'", stderr)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestRunNoCommand(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	exitCode := Run([]string{"--lat", "40", "--lon", "-74"})
+	exitCode := Run([]string{"--latitude", "40", "--longitude", "-74", "--forecast-days", "1"})
 
 	_ = w.Close()
 	os.Stderr = oldStderr
@@ -123,7 +123,7 @@ func TestRunNoCommand(t *testing.T) {
 	if exitCode != 2 {
 		t.Errorf("Run with args but no command exit code = %d, want 2", exitCode)
 	}
-	// The error is about lat/lon validation since the first arg is used as command name
+	// The error is about unknown command since the first arg is used as command name
 	if !strings.Contains(stderr, "Error:") {
 		t.Errorf("Run should output error to stderr, got: %q", stderr)
 	}
@@ -267,10 +267,10 @@ func TestRunCommandDispatch(t *testing.T) {
 		args []string
 		want int // expected exit code
 	}{
-		{"hourly dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "1"}, 0},
-		{"hourly 2 days dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--hourly", "--forecast-days", "2"}, 0},
-		{"daily dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "7"}, 0},
-		{"daily 14 days dispatch", []string{"forecast", "--lat", "40.7128", "--lon", "-74.0060", "--daily", "--forecast-days", "14"}, 0},
+		{"hourly dispatch", []string{"hourly", "--latitude", "40.7128", "--longitude", "-74.0060", "--forecast-days", "1"}, 0},
+		{"hourly 2 days dispatch", []string{"hourly", "--latitude", "40.7128", "--longitude", "-74.0060", "--forecast-days", "2"}, 0},
+		{"daily dispatch", []string{"daily", "--latitude", "40.7128", "--longitude", "-74.0060", "--forecast-days", "7"}, 0},
+		{"daily 14 days dispatch", []string{"daily", "--latitude", "40.7128", "--longitude", "-74.0060", "--forecast-days", "14"}, 0},
 	}
 
 	for _, tt := range testCases {
@@ -278,10 +278,11 @@ func TestRunCommandDispatch(t *testing.T) {
 			if len(tt.args) == 0 {
 				t.Fatal("no command provided")
 			}
+			command := tt.args[0]
 			commandArgs := tt.args[1:]
 
 			// Parse args to get config (same as Run does)
-			cfg, err := cli.Parse(commandArgs)
+			cfg, err := cli.Parse(commandArgs, command)
 			if err != nil {
 				t.Fatalf("cli.Parse failed: %v", err)
 			}
@@ -304,9 +305,9 @@ func TestRunValidatesArgsBeforeDispatch(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"invalid lat format", []string{"forecast", "--lat", "abc", "--lon", "0", "--hourly"}},
-		{"lat out of range", []string{"forecast", "--lat", "100", "--lon", "0", "--hourly"}},
-		{"no mode", []string{"forecast", "--lat", "40", "--lon", "-74"}},
+		{"invalid latitude format", []string{"hourly", "--latitude", "abc", "--longitude", "0", "--forecast-days", "1"}},
+		{"latitude out of range", []string{"hourly", "--latitude", "100", "--longitude", "0", "--forecast-days", "1"}},
+		{"no forecast-days", []string{"hourly", "--latitude", "40", "--longitude", "-74"}},
 	}
 
 	for _, tt := range tests {
@@ -342,11 +343,12 @@ func TestRunValidationErrorExitCode(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"lat out of range", []string{"forecast", "--lat", "100", "--lon", "0", "--hourly"}, 3},
-		{"lon out of range", []string{"forecast", "--lat", "40", "--lon", "200", "--hourly"}, 3},
-		{"invalid units", []string{"forecast", "--lat", "40", "--lon", "0", "--hourly", "--units", "invalid"}, 3},
-		{"no mode", []string{"forecast", "--lat", "40", "--lon", "0"}, 3},
-		{"both modes", []string{"forecast", "--lat", "40", "--lon", "0", "--hourly", "--daily"}, 3},
+		{"latitude out of range", []string{"hourly", "--latitude", "100", "--longitude", "0", "--forecast-days", "1"}, 3},
+		{"longitude out of range", []string{"daily", "--latitude", "40", "--longitude", "200", "--forecast-days", "1"}, 3},
+		{"invalid units", []string{"hourly", "--latitude", "40", "--longitude", "0", "--forecast-days", "1", "--units", "invalid"}, 3},
+		{"no forecast-days", []string{"hourly", "--latitude", "40", "--longitude", "0"}, 3},
+		{"hourly exceeds max", []string{"hourly", "--latitude", "40", "--longitude", "0", "--forecast-days", "3"}, 3},
+		{"daily exceeds max", []string{"daily", "--latitude", "40", "--longitude", "0", "--forecast-days", "15"}, 3},
 	}
 
 	for _, tt := range tests {
@@ -366,9 +368,9 @@ func TestRunInvalidArgumentExitCode(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"missing lat/lon", []string{"forecast", "--hourly"}, 2},
-		{"invalid lat format", []string{"forecast", "--lat", "abc", "--lon", "0", "--hourly"}, 2},
-		{"invalid lon format", []string{"forecast", "--lat", "0", "--lon", "xyz", "--hourly"}, 2},
+		{"invalid latitude format", []string{"hourly", "--latitude", "abc", "--longitude", "0", "--forecast-days", "1"}, 2},
+		{"invalid longitude format", []string{"daily", "--latitude", "0", "--longitude", "xyz", "--forecast-days", "1"}, 2},
+		{"invalid forecast-days format", []string{"hourly", "--latitude", "0", "--longitude", "0", "--forecast-days", "abc"}, 2},
 	}
 
 	for _, tt := range tests {
@@ -390,13 +392,15 @@ func TestRunHelpFlags(t *testing.T) {
 		wantOutput   string
 	}{
 		// Root help
-		{"root -h", []string{"-h"}, 0, "Usage: openmeteo-cli forecast"},
-		{"root --help", []string{"--help"}, 0, "Usage: openmeteo-cli forecast"},
+		{"root -h", []string{"-h"}, 0, "Usage: openmeteo-cli"},
+		{"root --help", []string{"--help"}, 0, "Usage: openmeteo-cli"},
 		// Command help
-		{"forecast -h", []string{"forecast", "-h"}, 0, "Usage: openmeteo-cli forecast"},
-		{"forecast --help", []string{"forecast", "--help"}, 0, "Usage: openmeteo-cli forecast"},
-		{"forecast hourly -h", []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "-h"}, 0, "Usage: openmeteo-cli forecast"},
-		{"forecast daily --help", []string{"forecast", "--lat", "40", "--lon", "-74", "--daily", "--help"}, 0, "Usage: openmeteo-cli forecast"},
+		{"hourly -h", []string{"hourly", "-h"}, 0, "Usage: openmeteo-cli hourly"},
+		{"hourly --help", []string{"hourly", "--help"}, 0, "Usage: openmeteo-cli hourly"},
+		{"daily -h", []string{"daily", "-h"}, 0, "Usage: openmeteo-cli daily"},
+		{"daily --help", []string{"daily", "--help"}, 0, "Usage: openmeteo-cli daily"},
+		{"hourly with args and -h", []string{"hourly", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1", "-h"}, 0, "Usage: openmeteo-cli hourly"},
+		{"daily with args and --help", []string{"daily", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1", "--help"}, 0, "Usage: openmeteo-cli daily"},
 	}
 
 	for _, tt := range tests {
@@ -433,15 +437,21 @@ func TestRunDoesNotTreatFlagValuesAsHelp(t *testing.T) {
 	}{
 		{
 			name:         "units value help token returns validation error",
-			args:         []string{"forecast", "--lat", "40", "--lon", "-74", "--hourly", "--units", "--help"},
+			args:         []string{"hourly", "--latitude", "40", "--longitude", "-74", "--forecast-days", "1", "--units", "--help"},
 			wantExitCode: 3,
 			wantStdErr:   "Error: units must be 'metric' or 'imperial'",
 		},
 		{
-			name:         "lat value help token returns parse error",
-			args:         []string{"forecast", "--lat", "-h", "--lon", "-74", "--hourly"},
+			name:         "latitude value help token returns parse error",
+			args:         []string{"hourly", "--latitude", "-h", "--longitude", "-74", "--forecast-days", "1"},
 			wantExitCode: 2,
-			wantStdErr:   "Error: invalid lat value",
+			wantStdErr:   "Error: invalid latitude value",
+		},
+		{
+			name:         "forecast-days value help token returns parse error",
+			args:         []string{"hourly", "--latitude", "40", "--longitude", "-74", "--forecast-days", "--help"},
+			wantExitCode: 2,
+			wantStdErr:   "Error: invalid forecast-days value",
 		},
 	}
 

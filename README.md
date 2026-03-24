@@ -47,16 +47,17 @@ The binary will be created at `bin/openmeteo-cli`.
 
 ## Commands
 
-- `forecast` - Get weather forecast (hourly or daily)
+- `hourly` - Get hourly weather forecast (max 2 days)
+- `daily` - Get daily weather forecast (max 14 days)
 
 ## Usage
 
 ```bash
-# Hourly forecast (max 2 days)
-openmeteo-cli forecast --lat <latitude> --lon <longitude> --hourly [--forecast-days 1|2]
+# Hourly forecast (1-2 days)
+openmeteo-cli hourly --latitude <latitude> --longitude <longitude> --forecast-days <1-2>
 
-# Daily forecast (max 14 days)
-openmeteo-cli forecast --lat <latitude> --lon <longitude> --daily [--forecast-days 1-14]
+# Daily forecast (1-14 days)
+openmeteo-cli daily --latitude <latitude> --longitude <longitude> --forecast-days <1-14>
 ```
 
 ## Help
@@ -66,16 +67,17 @@ Show help message:
 ```bash
 openmeteo-cli -h
 openmeteo-cli --help
-openmeteo-cli forecast --help
+openmeteo-cli hourly --help
+openmeteo-cli daily --help
 ```
 
 ## Options
 
-- `--lat <float>` - Latitude coordinate (required, -90 to 90)
-- `--lon <float>` - Longitude coordinate (required, -180 to 180)
-- `--hourly` - Get hourly forecast (max 2 days, mutually exclusive with --daily)
-- `--daily` - Get daily forecast (max 14 days, mutually exclusive with --hourly)
-- `--forecast-days <int>` - Number of days to forecast (default: 1)
+- `--latitude <float>` - Latitude coordinate (required, -90 to 90)
+- `--longitude <float>` - Longitude coordinate (required, -180 to 180)
+- `--forecast-days <int>` - Number of days to forecast (required)
+  - For `hourly`: 1-2 days
+  - For `daily`: 1-14 days
 - `--units metric|imperial` - Units: metric (default) or imperial
 - `--format toon|json` - Output format: toon (default) or json
 
@@ -83,54 +85,57 @@ openmeteo-cli forecast --help
 
 ### Hourly forecast for New York City
 ```bash
-openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly
+openmeteo-cli hourly --latitude 40.7128 --longitude -74.0060 --forecast-days 1
 ```
 
 ### 2-day hourly forecast
 ```bash
-openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --forecast-days 2
+openmeteo-cli hourly --latitude 40.7128 --longitude -74.0060 --forecast-days 2
 ```
 
 ### 7-day daily forecast with imperial units
 ```bash
-openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --daily --forecast-days 7 --units imperial
+openmeteo-cli daily --latitude 40.7128 --longitude -74.0060 --forecast-days 7 --units imperial
+```
+
+### 14-day daily forecast
+```bash
+openmeteo-cli daily --latitude 40.7128 --longitude -74.0060 --forecast-days 14
 ```
 
 ### JSON output for programmatic use
 ```bash
-openmeteo-cli forecast --lat 40.7128 --lon -74.0060 --hourly --format json
+openmeteo-cli hourly --latitude 40.7128 --longitude -74.0060 --forecast-days 1 --format json
 ```
 
 ### Using different locations
 
 **London, UK:**
 ```bash
-openmeteo-cli forecast --lat 51.5074 --lon -0.1278 --hourly
-openmeteo-cli forecast --lat 51.5074 --lon -0.1278 --daily --forecast-days 7
+openmeteo-cli hourly --latitude 51.5074 --longitude -0.1278 --forecast-days 1
+openmeteo-cli daily --latitude 51.5074 --longitude -0.1278 --forecast-days 7
 ```
 
 **Tokyo, Japan:**
 ```bash
-openmeteo-cli forecast --lat 35.6762 --lon 139.6503 --hourly
+openmeteo-cli hourly --latitude 35.6762 --longitude 139.6503 --forecast-days 1
 ```
 
 **Sydney, Australia:**
 ```bash
-openmeteo-cli forecast --lat -33.8688 --lon 151.2093 --daily --forecast-days 14 --units imperial
+openmeteo-cli daily --latitude -33.8688 --longitude 151.2093 --forecast-days 14 --units imperial
 ```
 
 ## Defaults
 
 - Units: `metric`
 - Format: `toon`
-- Forecast days: `1`
 
 ## Validation Rules
 
-- Exactly one of `--hourly` or `--daily` is required
-- `--hourly` supports maximum 2 days
-- `--daily` supports maximum 14 days
-- `--forecast-days` must be at least 1
+- `--forecast-days` is required (no default)
+- `hourly` command: `--forecast-days` must be 1-2
+- `daily` command: `--forecast-days` must be 1-14
 
 ## Output Format Notes
 
@@ -183,18 +188,22 @@ Example:
 #### Syntax
 
 ```bash
-openmeteo-cli forecast --lat <float> --lon <float> (--hourly | --daily) [options]
+openmeteo-cli (hourly | daily) --latitude <float> --longitude <float> --forecast-days <int> [options]
 ```
+
+#### Commands
+
+- `hourly`: Get hourly weather forecast (1-2 days)
+- `daily`: Get daily weather forecast (1-14 days)
 
 #### Required Options
 
-- `--lat <float>`: Latitude coordinate (must be between -90 and 90)
-- `--lon <float>`: Longitude coordinate (must be between -180 and 180)
-- `--hourly` or `--daily`: Exactly one must be specified
+- `--latitude <float>`: Latitude coordinate (must be between -90 and 90)
+- `--longitude <float>`: Longitude coordinate (must be between -180 and 180)
+- `--forecast-days <int>`: Number of days (1-2 for hourly, 1-14 for daily)
 
 #### Optional Options
 
-- `--forecast-days <int>`: Number of days (default: 1)
 - `--units metric|imperial`: Weather units (default: `metric`)
 - `--format toon|json`: Output format (default: `toon`)
 

@@ -9,13 +9,12 @@ import (
 
 // Config holds all configuration for a CLI command execution.
 type Config struct {
-	Hourly      bool
-	Daily       bool
+	Mode         string
 	ForecastDays int
-	Lat         float64
-	Lon         float64
-	Units       string
-	Format      string
+	Latitude     float64
+	Longitude    float64
+	Units        string
+	Format       string
 }
 
 // ValidationError represents a validation error with exit code 3.
@@ -41,7 +40,7 @@ func HasHelpFlag(args []string) bool {
 		switch args[i] {
 		case "-h", "--help":
 			return true
-		case "--lat", "--lon", "--units", "--format", "--forecast-days":
+		case "--latitude", "--longitude", "--units", "--format", "--forecast-days":
 			if i+1 < len(args) {
 				i++
 			}
@@ -50,15 +49,15 @@ func HasHelpFlag(args []string) bool {
 	return false
 }
 
-// Parse parses command-line arguments for the forecast command.
-func Parse(args []string) (*Config, error) {
+// Parse parses command-line arguments for the hourly or daily command.
+// mode is "hourly" or "daily" depending on the subcommand.
+func Parse(args []string, mode string) (*Config, error) {
 	if HasHelpFlag(args) {
 		cfg := &Config{
-			Hourly:       false,
-			Daily:        false,
+			Mode:         mode,
 			ForecastDays: 1,
-			Lat:          0,
-			Lon:          0,
+			Latitude:     0,
+			Longitude:    0,
 			Units:        "metric",
 			Format:       "toon",
 		}
@@ -66,46 +65,43 @@ func Parse(args []string) (*Config, error) {
 	}
 
 	// Default values
-	var lat, lon float64
+	var latitude, longitude float64
 	var units, format string
 	var forecastDays int
-	var hourly, daily bool
-	var hasLat, hasLon, hasUnits, hasFormat, hasForecastDays bool
-	var hasHourly, hasDaily bool
+	var hasLatitude, hasLongitude, hasUnits, hasFormat, hasForecastDays bool
 
 	units = "metric"
 	format = "toon"
-	forecastDays = 1
 
 	// Parse arguments manually
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--lat" && i+1 < len(args) {
+		if args[i] == "--latitude" && i+1 < len(args) {
 			tmp, err := strconv.ParseFloat(args[i+1], 64)
 			if err != nil {
-				return nil, &InvalidArgumentError{message: "invalid lat value"}
+				return nil, &InvalidArgumentError{message: "invalid latitude value"}
 			}
 			if math.IsNaN(tmp) || math.IsInf(tmp, 0) {
-				return nil, &InvalidArgumentError{message: "lat must be a valid finite number"}
+				return nil, &InvalidArgumentError{message: "latitude must be a valid finite number"}
 			}
-			if hasLat {
-				return nil, &InvalidArgumentError{message: "duplicate flag: --lat"}
+			if hasLatitude {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --latitude"}
 			}
-			lat = tmp
-			hasLat = true
+			latitude = tmp
+			hasLatitude = true
 			i++
-		} else if args[i] == "--lon" && i+1 < len(args) {
+		} else if args[i] == "--longitude" && i+1 < len(args) {
 			tmp, err := strconv.ParseFloat(args[i+1], 64)
 			if err != nil {
-				return nil, &InvalidArgumentError{message: "invalid lon value"}
+				return nil, &InvalidArgumentError{message: "invalid longitude value"}
 			}
 			if math.IsNaN(tmp) || math.IsInf(tmp, 0) {
-				return nil, &InvalidArgumentError{message: "lon must be a valid finite number"}
+				return nil, &InvalidArgumentError{message: "longitude must be a valid finite number"}
 			}
-			if hasLon {
-				return nil, &InvalidArgumentError{message: "duplicate flag: --lon"}
+			if hasLongitude {
+				return nil, &InvalidArgumentError{message: "duplicate flag: --longitude"}
 			}
-			lon = tmp
-			hasLon = true
+			longitude = tmp
+			hasLongitude = true
 			i++
 		} else if args[i] == "--units" && i+1 < len(args) {
 			if hasUnits {
@@ -121,18 +117,6 @@ func Parse(args []string) (*Config, error) {
 			format = args[i+1]
 			hasFormat = true
 			i++
-		} else if args[i] == "--hourly" {
-			if hasHourly {
-				return nil, &InvalidArgumentError{message: "duplicate flag: --hourly"}
-			}
-			hourly = true
-			hasHourly = true
-		} else if args[i] == "--daily" {
-			if hasDaily {
-				return nil, &InvalidArgumentError{message: "duplicate flag: --daily"}
-			}
-			daily = true
-			hasDaily = true
 		} else if args[i] == "--forecast-days" && i+1 < len(args) {
 			if hasForecastDays {
 				return nil, &InvalidArgumentError{message: "duplicate flag: --forecast-days"}
@@ -157,31 +141,28 @@ func Parse(args []string) (*Config, error) {
 	}
 
 	// Validate required parameters
-	if !hasLat || !hasLon {
-		return nil, &InvalidArgumentError{message: "lat and lon are required"}
+	if !hasLatitude || !hasLongitude {
+		return nil, &ValidationError{message: "--latitude and --longitude are required"}
 	}
 
-	// Validate that exactly one of --hourly or --daily is specified
-	if hasHourly && hasDaily {
-		return nil, &ValidationError{message: "cannot use both --hourly and --daily"}
-	}
-	if !hasHourly && !hasDaily {
-		return nil, &ValidationError{message: "must specify either --hourly or --daily"}
+	// Validate forecast-days is required
+	if !hasForecastDays {
+		return nil, &ValidationError{message: "--forecast-days is required"}
 	}
 
-	// Validate forecast-days limits
-	if hourly && forecastDays > 2 {
-		return nil, &ValidationError{message: "--hourly supports maximum 2 days"}
+	// Validate forecast-days limits based on mode
+	if mode == "hourly" && forecastDays > 2 {
+		return nil, &ValidationError{message: "--forecast-days must be between 1 and 2 for hourly forecast"}
 	}
-	if daily && forecastDays > 14 {
-		return nil, &ValidationError{message: "--daily supports maximum 14 days"}
+	if mode == "daily" && forecastDays > 14 {
+		return nil, &ValidationError{message: "--forecast-days must be between 1 and 14 for daily forecast"}
 	}
 
-	if lat < -90 || lat > 90 {
+	if latitude < -90 || latitude > 90 {
 		return nil, &ValidationError{message: "latitude must be between -90 and 90"}
 	}
 
-	if lon < -180 || lon > 180 {
+	if longitude < -180 || longitude > 180 {
 		return nil, &ValidationError{message: "longitude must be between -180 and 180"}
 	}
 
@@ -194,11 +175,10 @@ func Parse(args []string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Hourly:       hourly,
-		Daily:        daily,
+		Mode:         mode,
 		ForecastDays: forecastDays,
-		Lat:          lat,
-		Lon:          lon,
+		Latitude:     latitude,
+		Longitude:    longitude,
 		Units:        units,
 		Format:       format,
 	}
