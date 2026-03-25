@@ -2,6 +2,7 @@ package forecast
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"openmeteo-cli/internal/openmeteo"
@@ -26,21 +27,34 @@ func NewService(client *openmeteo.Client, mapper *weathercode.Mapper) *Service {
 }
 
 // Forecast returns weather forecast based on the mode.
-func (s *Service) Forecast(lat, lon float64, units string, hourly bool, forecastDays int) (interface{}, error) {
+// location is optional - if provided via geocoding, it will be included in the response metadata.
+func (s *Service) Forecast(lat, lon float64, units string, hourly bool, forecastDays int, location *openmeteo.ResolvedLocation) (interface{}, error) {
 	if hourly {
-		return s.fetchHourlyForecast(lat, lon, units, forecastDays)
+		return s.fetchHourlyForecast(lat, lon, units, forecastDays, location)
 	}
-	return s.fetchDailyForecast(lat, lon, units, forecastDays)
+	return s.fetchDailyForecast(lat, lon, units, forecastDays, location)
 }
 
 // fetchHourlyForecast fetches hourly forecast for the specified number of days (max 2).
-func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDays int) (*HourlyOutput, error) {
+func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDays int, location *openmeteo.ResolvedLocation) (*HourlyOutput, error) {
 	if forecastDays < 1 || forecastDays > 2 {
 		return nil, fmt.Errorf("hourly forecast supports 1-2 days, got %d", forecastDays)
 	}
 
 	now := time.Now()
-	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", forecastDays)
+
+	// Legacy variable set for hourly compatibility
+	req := openmeteo.ForecastRequest{
+		Latitude:            lat,
+		Longitude:           lon,
+		CurrentVars:         []string{"temperature_2m", "apparent_temperature", "relative_humidity_2m", "precipitation", "precipitation_probability", "wind_speed_10m", "wind_gusts_10m", "wind_direction_10m", "uv_index", "weather_code"},
+		HourlyVars:          []string{"temperature_2m", "apparent_temperature", "relative_humidity_2m", "precipitation", "precipitation_probability", "wind_speed_10m", "wind_gusts_10m", "wind_direction_10m", "uv_index", "weather_code"},
+		HourlyForecastHours: forecastDays * 24, // Convert days to hours for hourly forecast
+		DailyForecastDays:   forecastDays,
+		Units:               units,
+	}
+
+	apiResp, err := s.client.FetchForecast(req)
 	if err != nil {
 		return nil, err
 	}
@@ -58,14 +72,23 @@ func (s *Service) fetchHourlyForecast(lat, lon float64, units string, forecastDa
 		return nil, err
 	}
 
+	meta := Meta{
+		Units:     s.getUnits(units),
+		Timezone:  apiResp.Timezone,
+		Latitude:  apiResp.Latitude,
+		Longitude: apiResp.Longitude,
+	}
+
+	// Include location metadata if provided via geocoding
+	if location != nil {
+		meta.Location = &Location{
+			Name:    location.Name,
+			Country: location.Country,
+		}
+	}
+
 	return &HourlyOutput{
-		Meta: Meta{
-			GeneratedAt: now,
-			Units:       s.getUnits(units),
-			Timezone:    apiResp.Timezone,
-			Latitude:    apiResp.Latitude,
-			Longitude:   apiResp.Longitude,
-		},
+		Meta: meta,
 		Days: daysMap,
 	}, nil
 }
@@ -198,13 +221,21 @@ func (s *Service) mapHourlyForDays(hourly openmeteo.Hourly, startDate string, nu
 }
 
 // fetchDailyForecast fetches daily forecast for the specified number of days (max 14).
-func (s *Service) fetchDailyForecast(lat, lon float64, units string, forecastDays int) (*DailyOutput, error) {
+func (s *Service) fetchDailyForecast(lat, lon float64, units string, forecastDays int, location *openmeteo.ResolvedLocation) (*DailyOutput, error) {
 	if forecastDays < 1 || forecastDays > 14 {
 		return nil, fmt.Errorf("daily forecast supports 1-14 days, got %d", forecastDays)
 	}
 
-	now := time.Now()
-	apiResp, err := s.client.FetchForecast(lat, lon, units, "auto", forecastDays)
+	// Legacy variable set for daily compatibility
+	req := openmeteo.ForecastRequest{
+		Latitude:          lat,
+		Longitude:         lon,
+		DailyVars:         []string{"weather_code", "temperature_2m_min", "temperature_2m_max", "precipitation_sum", "precipitation_probability_max", "wind_speed_10m_max", "wind_gusts_10m_max", "uv_index_max", "sunrise", "sunset"},
+		DailyForecastDays: forecastDays,
+		Units:             units,
+	}
+
+	apiResp, err := s.client.FetchForecast(req)
 	if err != nil {
 		return nil, err
 	}
@@ -221,14 +252,23 @@ func (s *Service) fetchDailyForecast(lat, lon float64, units string, forecastDay
 		return nil, err
 	}
 
+	meta := Meta{
+		Units:     s.getUnits(units),
+		Timezone:  apiResp.Timezone,
+		Latitude:  apiResp.Latitude,
+		Longitude: apiResp.Longitude,
+	}
+
+	// Include location metadata if provided via geocoding
+	if location != nil {
+		meta.Location = &Location{
+			Name:    location.Name,
+			Country: location.Country,
+		}
+	}
+
 	return &DailyOutput{
-		Meta: Meta{
-			GeneratedAt: now,
-			Units:       s.getUnits(units),
-			Timezone:    apiResp.Timezone,
-			Latitude:    apiResp.Latitude,
-			Longitude:   apiResp.Longitude,
-		},
+		Meta: meta,
 		Days: days,
 	}, nil
 }
@@ -500,4 +540,507 @@ func (s *Service) mapWeekDaily(daily openmeteo.Daily, maxDays int, loc *time.Loc
 		days = append(days, day)
 	}
 	return days, nil
+}
+
+// =============================================================================
+// Variable-driven forecast shaping methods
+// =============================================================================
+
+// ForecastRequest contains parameters for a variable-driven forecast request.
+type ForecastRequest struct {
+	Latitude            float64
+	Longitude           float64
+	CurrentVars         []string
+	HourlyVars          []string
+	DailyVars           []string
+	HourlyForecastHours int
+	DailyForecastDays   int
+	Units               string
+	Location            *openmeteo.ResolvedLocation
+}
+
+// ForecastVariable returns a variable-driven forecast response.
+func (s *Service) ForecastVariable(req ForecastRequest) (*ForecastOutput, error) {
+	// Build the Open-Meteo API request
+	omReq := openmeteo.ForecastRequest{
+		Latitude:            req.Latitude,
+		Longitude:           req.Longitude,
+		CurrentVars:         req.CurrentVars,
+		HourlyVars:          req.HourlyVars,
+		DailyVars:           req.DailyVars,
+		HourlyForecastHours: req.HourlyForecastHours,
+		DailyForecastDays:   req.DailyForecastDays,
+		Units:               req.Units,
+	}
+
+	apiResp, err := s.client.FetchForecast(omReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get timezone from API response
+	loc, err := time.LoadLocation(apiResp.Timezone)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid timezone %q from API: %v", openmeteo.ErrUpstreamAPI, apiResp.Timezone, err)
+	}
+
+	// Build output
+	output := &ForecastOutput{
+		Meta: Meta{
+			Units:     s.getUnits(req.Units),
+			Timezone:  apiResp.Timezone,
+			Latitude:  apiResp.Latitude,
+			Longitude: apiResp.Longitude,
+		},
+	}
+
+	// Include location metadata if provided via geocoding
+	if req.Location != nil {
+		output.Meta.Location = &Location{
+			Name:    req.Location.Name,
+			Country: req.Location.Country,
+		}
+	}
+
+	// Shape current section if requested
+	if len(req.CurrentVars) > 0 && len(apiResp.Current.Time) > 0 {
+		current, err := s.shapeCurrent(apiResp.Current, req.CurrentVars, loc)
+		if err != nil {
+			return nil, err
+		}
+		output.Current = current
+	}
+
+	// Shape hourly section if requested
+	if len(req.HourlyVars) > 0 && len(apiResp.Hourly.Time) > 0 {
+		hourly, err := s.shapeHourly(apiResp.Hourly, req.HourlyVars, loc)
+		if err != nil {
+			return nil, err
+		}
+		output.Hourly = hourly
+	}
+
+	// Shape daily section if requested
+	if len(req.DailyVars) > 0 && len(apiResp.Daily.Time) > 0 {
+		daily, err := s.shapeDaily(apiResp.Daily, req.DailyVars, loc)
+		if err != nil {
+			return nil, err
+		}
+		output.Daily = daily
+	}
+
+	return output, nil
+}
+
+// shapeCurrent creates a current output section from the API response.
+func (s *Service) shapeCurrent(current openmeteo.Current, vars []string, loc *time.Location) (*CurrentOutput, error) {
+	// Parse time
+	t, err := time.ParseInLocation("2006-01-02T15:04", current.Time, loc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to parse current time %q: %v", openmeteo.ErrUpstreamAPI, current.Time, err)
+	}
+	timeStr := t.Format("2006-01-02T15:04")
+
+	// Build field order: time is always first
+	fields := make([]string, 0, len(vars)+1)
+	fields = append(fields, "time")
+
+	// Build values map - using flat structure with direct values
+	values := make(map[string]any)
+	values["time"] = timeStr
+
+	// Add requested variables
+	for _, v := range vars {
+		// Skip time as we already added it
+		if v == "time" {
+			continue
+		}
+		val, outputName, err := s.getCurrentValue(current, v)
+		if err != nil {
+			return nil, err
+		}
+		values[outputName] = val
+		fields = append(fields, outputName)
+	}
+
+	return &CurrentOutput{
+		Fields: fields,
+		Values: values,
+	}, nil
+}
+
+// getCurrentValue extracts a value from the Current API response for a given variable.
+// Returns the value, the output field name, and an error. For weather_code, the output
+// field name is "weather" while other variables use their request variable name.
+func (s *Service) getCurrentValue(current openmeteo.Current, variable string) (any, string, error) {
+	// Handle weather_code specially - render as text and use "weather" as output field name
+	if variable == "weather_code" {
+		return s.weatherMapper.GetDescription(current.WeatherCode), "weather", nil
+	}
+
+	switch variable {
+	case "temperature_2m":
+		return current.Temperature2M, variable, nil
+	case "apparent_temperature":
+		return current.ApparentTemperature, variable, nil
+	case "relative_humidity_2m":
+		return current.RelativeHumidity2M, variable, nil
+	case "precipitation":
+		return current.Precipitation, variable, nil
+	case "precipitation_probability":
+		return current.PrecipitationProbability, variable, nil
+	case "wind_speed_10m":
+		return current.WindSpeed10M, variable, nil
+	case "wind_gusts_10m":
+		return current.WindGusts10M, variable, nil
+	case "wind_direction_10m":
+		return current.WindDirection10M, variable, nil
+	case "uv_index":
+		return current.UVIndex, variable, nil
+	default:
+		return nil, variable, fmt.Errorf("unsupported current variable: %s", variable)
+	}
+}
+
+// shapeHourly creates an hourly output section from the API response.
+func (s *Service) shapeHourly(hourly openmeteo.Hourly, vars []string, loc *time.Location) (*HourlyOutputNew, error) {
+	if len(hourly.Time) == 0 {
+		return nil, fmt.Errorf("%w: hourly time array is empty", openmeteo.ErrUpstreamAPI)
+	}
+
+	// Group by date
+	daysMap := make(map[string]*HourlyDay)
+
+	for i, timeStr := range hourly.Time {
+		if len(timeStr) < 10 {
+			return nil, fmt.Errorf("%w: invalid time format at index %d: %q", openmeteo.ErrUpstreamAPI, i, timeStr)
+		}
+
+		dateStr := timeStr[:10]
+		day, ok := daysMap[dateStr]
+		if !ok {
+			// Parse date for weekday
+			t, err := time.ParseInLocation("2006-01-02T15:04", timeStr, loc)
+			if err != nil {
+				return nil, fmt.Errorf("%w: failed to parse hourly time %q at index %d: %v", openmeteo.ErrUpstreamAPI, timeStr, i, err)
+			}
+			weekday := t.Format("Mon")
+
+			// Build field order for day: date, weekday, then requested vars (using output names)
+			fields := make([]string, 0, len(vars)+2)
+			fields = append(fields, "date", "weekday")
+			for _, v := range vars {
+				if v != "date" && v != "weekday" {
+					outputName := v
+					if v == "weather_code" {
+						outputName = "weather"
+					}
+					fields = append(fields, outputName)
+				}
+			}
+
+			day = &HourlyDay{
+				Fields: fields,
+				Values: map[string]any{
+					"date":    dateStr,
+					"weekday": weekday,
+				},
+				Hours: make([]HourlyEntry, 0),
+			}
+			daysMap[dateStr] = day
+		}
+
+		// Parse time for hour entry
+		t, err := time.ParseInLocation("2006-01-02T15:04", timeStr, loc)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to parse hourly time %q at index %d: %v", openmeteo.ErrUpstreamAPI, timeStr, i, err)
+		}
+		hourTime := t.Format("15:04")
+
+		// Build hour field order: time, then requested vars (using output names)
+		hourFields := make([]string, 0, len(vars)+1)
+		hourFields = append(hourFields, "time")
+		for _, v := range vars {
+			if v != "time" {
+				outputName := v
+				if v == "weather_code" {
+					outputName = "weather"
+				}
+				hourFields = append(hourFields, outputName)
+			}
+		}
+
+		hourValues := make(map[string]any)
+		hourValues["time"] = hourTime
+
+		// Add requested variables
+		for _, v := range vars {
+			if v == "time" {
+				continue
+			}
+			val, outputName, err := s.getHourlyValue(hourly, v, i)
+			if err != nil {
+				return nil, err
+			}
+			hourValues[outputName] = val
+		}
+
+		day.Hours = append(day.Hours, HourlyEntry{
+			Fields: hourFields,
+			Values: hourValues,
+		})
+	}
+
+	// Convert map to slice in date order
+	days := make([]HourlyDay, 0, len(daysMap))
+	for _, dateStr := range sortedDateKeys(daysMap) {
+		days = append(days, *daysMap[dateStr])
+	}
+
+	return &HourlyOutputNew{Days: days}, nil
+}
+
+// getHourlyValue extracts a value from the Hourly API response for a given variable at index.
+// Returns the value, the output field name, and an error. For weather_code, the output
+// field name is "weather" while other variables use their request variable name.
+func (s *Service) getHourlyValue(hourly openmeteo.Hourly, variable string, idx int) (any, string, error) {
+	// Handle weather_code specially - render as text and use "weather" as output field name
+	if variable == "weather_code" {
+		if idx >= len(hourly.WeatherCode) {
+			return nil, "weather", fmt.Errorf("%w: weather_code index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, idx, len(hourly.WeatherCode))
+		}
+		return s.weatherMapper.GetDescription(hourly.WeatherCode[idx]), "weather", nil
+	}
+
+	// Helper to check bounds
+	checkBounds := func(arr interface{}, name string) error {
+		var length int
+		switch a := arr.(type) {
+		case []string:
+			length = len(a)
+		case []float64:
+			length = len(a)
+		case []int:
+			length = len(a)
+		}
+		if idx >= length {
+			return fmt.Errorf("%w: %s index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, name, idx, length)
+		}
+		return nil
+	}
+
+	switch variable {
+	case "temperature_2m":
+		if err := checkBounds(hourly.Temperature2M, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.Temperature2M[idx], variable, nil
+	case "apparent_temperature":
+		if err := checkBounds(hourly.ApparentTemperature, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.ApparentTemperature[idx], variable, nil
+	case "relative_humidity_2m":
+		if err := checkBounds(hourly.RelativeHumidity2M, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.RelativeHumidity2M[idx], variable, nil
+	case "precipitation":
+		if err := checkBounds(hourly.Precipitation, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.Precipitation[idx], variable, nil
+	case "precipitation_probability":
+		if err := checkBounds(hourly.PrecipitationProbability, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.PrecipitationProbability[idx], variable, nil
+	case "wind_speed_10m":
+		if err := checkBounds(hourly.WindSpeed10M, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.WindSpeed10M[idx], variable, nil
+	case "wind_gusts_10m":
+		if err := checkBounds(hourly.WindGusts10M, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.WindGusts10M[idx], variable, nil
+	case "wind_direction_10m":
+		if err := checkBounds(hourly.WindDirection10M, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.WindDirection10M[idx], variable, nil
+	case "uv_index":
+		if err := checkBounds(hourly.UVIndex, variable); err != nil {
+			return nil, variable, err
+		}
+		return hourly.UVIndex[idx], variable, nil
+	default:
+		return nil, variable, fmt.Errorf("unsupported hourly variable: %s", variable)
+	}
+}
+
+// shapeDaily creates a daily output section from the API response.
+func (s *Service) shapeDaily(daily openmeteo.Daily, vars []string, loc *time.Location) (*DailyOutputNew, error) {
+	if len(daily.Time) == 0 {
+		return nil, fmt.Errorf("%w: daily time array is empty", openmeteo.ErrUpstreamAPI)
+	}
+
+	// Build field order: date, weekday, then requested vars (using output names)
+	fields := make([]string, 0, len(vars)+2)
+	fields = append(fields, "date", "weekday")
+	for _, v := range vars {
+		if v != "date" && v != "weekday" {
+			outputName := v
+			if v == "weather_code" {
+				outputName = "weather"
+			}
+			fields = append(fields, outputName)
+		}
+	}
+
+	// Build rows
+	rows := make([]DailyRow, 0, len(daily.Time))
+	for i, dateStr := range daily.Time {
+		// Parse date for weekday
+		t, err := time.ParseInLocation("2006-01-02", dateStr, loc)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to parse daily date %q at index %d: %v", openmeteo.ErrUpstreamAPI, dateStr, i, err)
+		}
+		weekday := t.Format("Mon")
+
+		values := make(map[string]any)
+		values["date"] = dateStr
+		values["weekday"] = weekday
+
+		// Add requested variables
+		for _, v := range vars {
+			if v == "date" || v == "weekday" {
+				continue
+			}
+			val, outputName, err := s.getDailyValue(daily, v, i, loc)
+			if err != nil {
+				return nil, err
+			}
+			values[outputName] = val
+		}
+
+		rows = append(rows, DailyRow{Values: values})
+	}
+
+	return &DailyOutputNew{
+		Fields: fields,
+		Rows:   rows,
+	}, nil
+}
+
+// getDailyValue extracts a value from the Daily API response for a given variable at index.
+// Returns the value, the output field name, and an error. For weather_code, the output
+// field name is "weather" while other variables use their request variable name.
+func (s *Service) getDailyValue(daily openmeteo.Daily, variable string, idx int, loc *time.Location) (any, string, error) {
+	// Handle weather_code specially - render as text and use "weather" as output field name
+	if variable == "weather_code" {
+		if idx >= len(daily.WeatherCode) {
+			return nil, "weather", fmt.Errorf("%w: weather_code index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, idx, len(daily.WeatherCode))
+		}
+		return s.weatherMapper.GetDescription(daily.WeatherCode[idx]), "weather", nil
+	}
+
+	// Helper to check bounds
+	checkBounds := func(arr interface{}, name string) error {
+		var length int
+		switch a := arr.(type) {
+		case []string:
+			length = len(a)
+		case []float64:
+			length = len(a)
+		case []int:
+			length = len(a)
+		}
+		if idx >= length {
+			return fmt.Errorf("%w: %s index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, name, idx, length)
+		}
+		return nil
+	}
+
+	switch variable {
+	case "temperature_2m_max":
+		if err := checkBounds(daily.Temperature2MMax, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.Temperature2MMax[idx], variable, nil
+	case "temperature_2m_min":
+		if err := checkBounds(daily.Temperature2MMin, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.Temperature2MMin[idx], variable, nil
+	case "apparent_temperature_max":
+		// Note: Open-Meteo API doesn't return this in the current response structure
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	case "apparent_temperature_min":
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	case "precipitation_sum":
+		if err := checkBounds(daily.PrecipitationSum, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.PrecipitationSum[idx], variable, nil
+	case "precipitation_probability_max":
+		if err := checkBounds(daily.PrecipitationProbabilityMax, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.PrecipitationProbabilityMax[idx], variable, nil
+	case "precipitation_hours":
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	case "wind_speed_10m_max":
+		if err := checkBounds(daily.WindSpeed10MMax, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.WindSpeed10MMax[idx], variable, nil
+	case "wind_gusts_10m_max":
+		if err := checkBounds(daily.WindGusts10MMax, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.WindGusts10MMax[idx], variable, nil
+	case "uv_index_max":
+		if err := checkBounds(daily.UVIndexMax, variable); err != nil {
+			return nil, variable, err
+		}
+		return daily.UVIndexMax[idx], variable, nil
+	case "sunrise":
+		if idx >= len(daily.Sunrise) {
+			return nil, variable, fmt.Errorf("%w: sunrise index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, idx, len(daily.Sunrise))
+		}
+		// Parse and format sunrise time
+		sunriseTime, err := parseTime(daily.Sunrise[idx], loc)
+		if err != nil {
+			return nil, variable, err
+		}
+		return sunriseTime.Format("15:04"), variable, nil
+	case "sunset":
+		if idx >= len(daily.Sunset) {
+			return nil, variable, fmt.Errorf("%w: sunset index %d out of bounds (length %d)", openmeteo.ErrUpstreamAPI, idx, len(daily.Sunset))
+		}
+		// Parse and format sunset time
+		sunsetTime, err := parseTime(daily.Sunset[idx], loc)
+		if err != nil {
+			return nil, variable, err
+		}
+		return sunsetTime.Format("15:04"), variable, nil
+	case "daylight_duration":
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	case "sunshine_duration":
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	default:
+		return nil, variable, fmt.Errorf("unsupported daily variable: %s", variable)
+	}
+}
+
+// sortedDateKeys returns the keys of a date map in sorted order.
+func sortedDateKeys(m map[string]*HourlyDay) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

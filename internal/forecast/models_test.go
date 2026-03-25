@@ -2,7 +2,6 @@ package forecast
 
 import (
 	"testing"
-	"time"
 )
 
 func getUnits(units string) Units {
@@ -152,16 +151,12 @@ func TestUnits_HasAllFields(t *testing.T) {
 func TestMeta_HasAllFields(t *testing.T) {
 	// Verify Meta struct has all required fields
 	meta := Meta{
-		GeneratedAt: time.Now(),
-		Units:       Units{},
-		Timezone:    "UTC",
-		Latitude:    40.0,
-		Longitude:   -74.0,
+		Units:     Units{},
+		Timezone:  "UTC",
+		Latitude:  40.0,
+		Longitude: -74.0,
 	}
 
-	if meta.GeneratedAt.IsZero() {
-		t.Error("Meta.GeneratedAt should not be zero")
-	}
 	if meta.Timezone == "" {
 		t.Error("Meta.Timezone should not be empty")
 	}

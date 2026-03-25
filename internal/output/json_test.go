@@ -20,7 +20,7 @@ func TestJSONEncoder_EncodeHourly(t *testing.T) {
 			name: "basic hourly output",
 			input: &forecast.HourlyOutput{
 				Meta: forecast.Meta{
-					GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+					
 					Units: forecast.Units{
 						Temperature:              "C",
 						Humidity:                 "%",
@@ -77,7 +77,7 @@ func TestJSONEncoder_EncodeHourly(t *testing.T) {
 			name: "empty hours array",
 			input: &forecast.HourlyOutput{
 				Meta: forecast.Meta{
-					GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+					
 					Units: forecast.Units{
 						Temperature:              "C",
 						Humidity:                 "%",
@@ -125,7 +125,7 @@ func TestJSONEncoder_EncodeDaily(t *testing.T) {
 			name: "basic daily output",
 			input: &forecast.DailyOutput{
 				Meta: forecast.Meta{
-					GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+					
 					Units: forecast.Units{
 						Temperature:              "C",
 						Humidity:                 "%",
@@ -178,7 +178,7 @@ func TestJSONEncoder_EncodeDaily(t *testing.T) {
 			name: "empty days array",
 			input: &forecast.DailyOutput{
 				Meta: forecast.Meta{
-					GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+					
 					Units: forecast.Units{
 						Temperature:              "C",
 						Humidity:                 "%",
@@ -220,7 +220,7 @@ func TestJSONEncoder_EncodeDaily(t *testing.T) {
 func TestWriter_EncodeHourly(t *testing.T) {
 	output := &forecast.HourlyOutput{
 		Meta: forecast.Meta{
-			GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+			
 			Units: forecast.Units{
 				Temperature:              "C",
 				Humidity:                 "%",
@@ -308,7 +308,7 @@ func TestWriter_EncodeHourly(t *testing.T) {
 func TestWriter_EncodeDaily(t *testing.T) {
 	output := &forecast.DailyOutput{
 		Meta: forecast.Meta{
-			GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+			
 			Units: forecast.Units{
 				Temperature:              "C",
 				Humidity:                 "%",
@@ -382,7 +382,7 @@ func TestWriter_EncodeDaily(t *testing.T) {
 func TestWriter_EncodeHourly_TOON(t *testing.T) {
 	output := &forecast.HourlyOutput{
 		Meta: forecast.Meta{
-			GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+			
 			Units: forecast.Units{
 				Temperature: "C",
 			},
@@ -417,7 +417,7 @@ func TestWriter_EncodeHourly_TOON(t *testing.T) {
 func TestWriter_EncodeDaily_TOON(t *testing.T) {
 	output := &forecast.DailyOutput{
 		Meta: forecast.Meta{
-			GeneratedAt: mustParseTime("2026-03-21T12:00:00Z"),
+			
 			Units: forecast.Units{
 				Temperature: "C",
 			},
@@ -532,17 +532,6 @@ func checkJSONHasMeta(t *testing.T, buf *bytes.Buffer) {
 	}
 }
 
-func checkJSONHasHours(t *testing.T, buf *bytes.Buffer) {
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal JSON: %v", err)
-	}
-	if _, ok := result["hours"]; !ok {
-		t.Error("Expected 'hours' field in output")
-	}
-}
-
 func checkJSONHasDays(t *testing.T, buf *bytes.Buffer) {
 	var result map[string]interface{}
 	err := json.Unmarshal(buf.Bytes(), &result)
@@ -551,17 +540,6 @@ func checkJSONHasDays(t *testing.T, buf *bytes.Buffer) {
 	}
 	if _, ok := result["days"]; !ok {
 		t.Error("Expected 'days' field in output")
-	}
-}
-
-func checkJSONHasEmptyHours(t *testing.T, buf *bytes.Buffer) {
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal JSON: %v", err)
-	}
-	if hours, ok := result["hours"].([]interface{}); !ok || len(hours) != 0 {
-		t.Error("Expected empty 'hours' array in output")
 	}
 }
 

@@ -9,82 +9,6 @@ import (
 	"openmeteo-cli/internal/weathercode"
 )
 
-// TestService_Forecast_Hourly tests the Forecast method with hourly mode.
-func TestService_Forecast_Hourly(t *testing.T) {
-	mapper := weathercode.NewMapper()
-	client := openmeteo.NewClient(nil)
-	svc := NewService(client, mapper)
-
-	// Test with 1 day
-	result, err := svc.Forecast(40.0, -74.0, "metric", true, 1)
-	if err != nil {
-		// Expected - network call will fail, we're just verifying method exists
-		_ = err
-	}
-	if result != nil {
-		hourly, ok := result.(*HourlyOutput)
-		if !ok {
-			t.Fatalf("Expected HourlyOutput, got %T", result)
-		}
-		if hourly.Meta.Units.Temperature != "C" {
-			t.Errorf("Temperature = %q, want %q", hourly.Meta.Units.Temperature, "C")
-		}
-	}
-
-	// Test with 2 days
-	result, err = svc.Forecast(40.0, -74.0, "metric", true, 2)
-	if err != nil {
-		_ = err
-	}
-	if result != nil {
-		hourly, ok := result.(*HourlyOutput)
-		if !ok {
-			t.Fatalf("Expected HourlyOutput for 2 days, got %T", result)
-		}
-		if len(hourly.Days) > 2 {
-			t.Errorf("Expected at most 2 days, got %d", len(hourly.Days))
-		}
-	}
-}
-
-// TestService_Forecast_Daily tests the Forecast method with daily mode.
-func TestService_Forecast_Daily(t *testing.T) {
-	mapper := weathercode.NewMapper()
-	client := openmeteo.NewClient(nil)
-	svc := NewService(client, mapper)
-
-	// Test with 7 days
-	result, err := svc.Forecast(40.0, -74.0, "metric", false, 7)
-	if err != nil {
-		// Expected - network call will fail, we're just verifying method exists
-		_ = err
-	}
-	if result != nil {
-		daily, ok := result.(*DailyOutput)
-		if !ok {
-			t.Fatalf("Expected DailyOutput, got %T", result)
-		}
-		if daily.Meta.Units.Temperature != "C" {
-			t.Errorf("Temperature = %q, want %q", daily.Meta.Units.Temperature, "C")
-		}
-	}
-
-	// Test with 14 days
-	result, err = svc.Forecast(40.0, -74.0, "metric", false, 14)
-	if err != nil {
-		_ = err
-	}
-	if result != nil {
-		daily, ok := result.(*DailyOutput)
-		if !ok {
-			t.Fatalf("Expected DailyOutput for 14 days, got %T", result)
-		}
-		if len(daily.Days) > 14 {
-			t.Errorf("Expected at most 14 days, got %d", len(daily.Days))
-		}
-	}
-}
-
 // TestService_mapHourly_DatetimeFiltering tests that mapHourly filters to the correct date.
 func TestService_mapHourly_DatetimeFiltering(t *testing.T) {
 	mapper := weathercode.NewMapper()
@@ -369,12 +293,12 @@ func TestService_mapHourly_DSTHandling(t *testing.T) {
 	svc := NewService(client, mapper)
 
 	tests := []struct {
-	 name        string
-	 date        string
-	 hourlyTime  []string
-	 timezone    string
-	 expectedLen int
-}{
+		name        string
+		date        string
+		hourlyTime  []string
+		timezone    string
+		expectedLen int
+	}{
 		{
 			name:        "spring_forward_2026",
 			date:        "2026-03-08",
@@ -2804,19 +2728,19 @@ func TestService_Forecast_Hourly_DaysValidation(t *testing.T) {
 	svc := NewService(client, mapper)
 
 	// Test with 0 days - should fail
-	_, err := svc.Forecast(40.0, -74.0, "metric", true, 0)
+	_, err := svc.Forecast(40.0, -74.0, "metric", true, 0, nil)
 	if err == nil {
 		t.Error("Expected error for 0 days, got nil")
 	}
 
 	// Test with 3 days - should fail
-	_, err = svc.Forecast(40.0, -74.0, "metric", true, 3)
+	_, err = svc.Forecast(40.0, -74.0, "metric", true, 3, nil)
 	if err == nil {
 		t.Error("Expected error for 3 days, got nil")
 	}
 
 	// Test with 2 days - should succeed
-	result, err := svc.Forecast(40.0, -74.0, "metric", true, 2)
+	result, err := svc.Forecast(40.0, -74.0, "metric", true, 2, nil)
 	if err != nil {
 		t.Errorf("Unexpected error for 2 days: %v", err)
 	}
@@ -2837,19 +2761,19 @@ func TestService_Forecast_Daily_DaysValidation(t *testing.T) {
 	svc := NewService(client, mapper)
 
 	// Test with 0 days - should fail
-	_, err := svc.Forecast(40.0, -74.0, "metric", false, 0)
+	_, err := svc.Forecast(40.0, -74.0, "metric", false, 0, nil)
 	if err == nil {
 		t.Error("Expected error for 0 days, got nil")
 	}
 
 	// Test with 15 days - should fail
-	_, err = svc.Forecast(40.0, -74.0, "metric", false, 15)
+	_, err = svc.Forecast(40.0, -74.0, "metric", false, 15, nil)
 	if err == nil {
 		t.Error("Expected error for 15 days, got nil")
 	}
 
 	// Test with 14 days - should succeed
-	result, err := svc.Forecast(40.0, -74.0, "metric", false, 14)
+	result, err := svc.Forecast(40.0, -74.0, "metric", false, 14, nil)
 	if err != nil {
 		t.Errorf("Unexpected error for 14 days: %v", err)
 	}
@@ -2865,7 +2789,6 @@ func TestService_Forecast_Daily_DaysValidation(t *testing.T) {
 func TestService_HourlyOutput_JSONOutput(t *testing.T) {
 	// Test the models Marshal correctly
 	meta := Meta{
-		GeneratedAt: time.Now(),
 		Units: Units{
 			Temperature:              "C",
 			Humidity:                 "%",
@@ -2899,7 +2822,6 @@ func TestService_HourlyOutput_JSONOutput(t *testing.T) {
 func TestService_DailyOutput_JSONOutput(t *testing.T) {
 	// Test the models Marshal correctly
 	meta := Meta{
-		GeneratedAt: time.Now(),
 		Units: Units{
 			Temperature:              "C",
 			Humidity:                 "%",
@@ -2946,7 +2868,7 @@ func TestService_getUnits(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.units, func(t *testing.T) {
-			result, err := svc.Forecast(40.0, -74.0, tt.units, true, 1)
+			result, err := svc.Forecast(40.0, -74.0, tt.units, true, 1, nil)
 			if err != nil {
 				// Network call fails, but test structure
 				return
@@ -3995,5 +3917,549 @@ func TestService_mapDaily_MidnightBoundary4(t *testing.T) {
 	}
 	if dayResult.Date != "2026-03-22" {
 		t.Errorf("Day.Date = %q, want %q", dayResult.Date, "2026-03-22")
+	}
+}
+
+// TestService_Forecast_LocationMetadata_Hourly tests that location metadata is included in hourly output.
+func TestService_Forecast_LocationMetadata_Hourly(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	location := &openmeteo.ResolvedLocation{
+		Name:      "Berlin",
+		Country:   "Germany",
+		Admin1:    "Berlin",
+		Latitude:  52.52,
+		Longitude: 13.41,
+	}
+
+	// This will fail with network error, but we can still test the metadata structure
+	result, err := svc.Forecast(52.52, 13.41, "metric", true, 1, location)
+	if err != nil {
+		// Network call fails in test environment
+		return
+	}
+
+	if result != nil {
+		hourly, ok := result.(*HourlyOutput)
+		if !ok {
+			t.Fatalf("Expected HourlyOutput, got %T", result)
+		}
+
+		if hourly.Meta.Location == nil {
+			t.Fatal("Location metadata should not be nil when provided")
+		}
+
+		if hourly.Meta.Location.Name != "Berlin" {
+			t.Errorf("Location.Name = %q, want %q", hourly.Meta.Location.Name, "Berlin")
+		}
+
+		if hourly.Meta.Location.Country != "Germany" {
+			t.Errorf("Location.Country = %q, want %q", hourly.Meta.Location.Country, "Germany")
+		}
+	}
+}
+
+// TestService_Forecast_LocationMetadata_Daily tests that location metadata is included in daily output.
+func TestService_Forecast_LocationMetadata_Daily(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	location := &openmeteo.ResolvedLocation{
+		Name:      "Tokyo",
+		Country:   "Japan",
+		Admin1:    "Tokyo",
+		Latitude:  35.68,
+		Longitude: 139.76,
+	}
+
+	// This will fail with network error, but we can still test the metadata structure
+	result, err := svc.Forecast(35.68, 139.76, "metric", false, 7, location)
+	if err != nil {
+		// Network call fails in test environment
+		return
+	}
+
+	if result != nil {
+		daily, ok := result.(*DailyOutput)
+		if !ok {
+			t.Fatalf("Expected DailyOutput, got %T", result)
+		}
+
+		if daily.Meta.Location == nil {
+			t.Fatal("Location metadata should not be nil when provided")
+		}
+
+		if daily.Meta.Location.Name != "Tokyo" {
+			t.Errorf("Location.Name = %q, want %q", daily.Meta.Location.Name, "Tokyo")
+		}
+
+		if daily.Meta.Location.Country != "Japan" {
+			t.Errorf("Location.Country = %q, want %q", daily.Meta.Location.Country, "Japan")
+		}
+	}
+}
+
+// TestService_Forecast_NoLocationMetadata tests that location metadata is nil when not provided.
+func TestService_Forecast_NoLocationMetadata(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	// Call Forecast with nil location
+	result, err := svc.Forecast(40.0, -74.0, "metric", true, 1, nil)
+	if err != nil {
+		// Network call fails in test environment
+		return
+	}
+
+	if result != nil {
+		hourly, ok := result.(*HourlyOutput)
+		if !ok {
+			t.Fatalf("Expected HourlyOutput, got %T", result)
+		}
+
+		if hourly.Meta.Location != nil {
+			t.Error("Location metadata should be nil when not provided")
+		}
+	}
+}
+
+// TestService_Forecast_LocationMetadata_OptionalAdmin1 tests that admin1 is optional.
+func TestService_Forecast_LocationMetadata_OptionalAdmin1(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	location := &openmeteo.ResolvedLocation{
+		Name:      "Paris",
+		Country:   "France",
+		Admin1:    "", // Empty admin1
+		Latitude:  48.85,
+		Longitude: 2.35,
+	}
+
+	// This will fail with network error, but we can still test the metadata structure
+	result, err := svc.Forecast(48.85, 2.35, "metric", true, 1, location)
+	if err != nil {
+		// Network call fails in test environment
+		return
+	}
+
+	if result != nil {
+		hourly, ok := result.(*HourlyOutput)
+		if !ok {
+			t.Fatalf("Expected HourlyOutput, got %T", result)
+		}
+
+		if hourly.Meta.Location == nil {
+			t.Fatal("Location metadata should not be nil when provided")
+		}
+
+		if hourly.Meta.Location.Name != "Paris" {
+			t.Errorf("Location.Name = %q, want %q", hourly.Meta.Location.Name, "Paris")
+		}
+	}
+}
+
+// =============================================================================
+// Variable-driven forecast shaping tests
+// =============================================================================
+
+// TestService_ForecastVariable_CurrentOnly tests current-only output shaping.
+func TestService_ForecastVariable_CurrentOnly(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:    52.52,
+		Longitude:   13.41,
+		CurrentVars: []string{"temperature_2m", "weather_code"},
+		Units:       "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("ForecastVariable() returned nil result")
+	}
+
+	// Check meta
+	if result.Meta.Units.Temperature != "C" {
+		t.Errorf("Units.Temperature = %q, want %q", result.Meta.Units.Temperature, "C")
+	}
+
+	// Check current section
+	if result.Current == nil {
+		t.Fatal("Current section is nil")
+	}
+
+	// Check fields - should start with "time"
+	if len(result.Current.Fields) < 2 {
+		t.Fatalf("Current.Fields length = %d, want at least 2", len(result.Current.Fields))
+	}
+
+	if result.Current.Fields[0] != "time" {
+		t.Errorf("First field = %q, want %q", result.Current.Fields[0], "time")
+	}
+
+	// Check time value is present
+	timeVal, ok := result.Current.Values["time"]
+	if !ok {
+		t.Fatal("time value not found in Current.Values")
+	}
+
+	if _, ok := timeVal.(string); !ok {
+		t.Fatalf("time value is not a string, got %T", timeVal)
+	}
+}
+
+// TestService_ForecastVariable_HourlyOnly tests hourly-only output shaping.
+func TestService_ForecastVariable_HourlyOnly(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:            52.52,
+		Longitude:           13.41,
+		HourlyVars:          []string{"temperature_2m", "weather_code"},
+		HourlyForecastHours: 24,
+		Units:               "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("ForecastVariable() returned nil result")
+	}
+
+	// Check current section is nil
+	if result.Current != nil {
+		t.Error("Current section should be nil for hourly-only request")
+	}
+
+	// Check hourly section
+	if result.Hourly == nil {
+		t.Fatal("Hourly section is nil")
+	}
+
+	// Check at least one day is present
+	if len(result.Hourly.Days) == 0 {
+		t.Fatal("Hourly.Days is empty")
+	}
+
+	// Check day structure
+	day := result.Hourly.Days[0]
+	if len(day.Fields) < 3 {
+		t.Fatalf("Day.Fields length = %d, want at least 3 (date, weekday, + vars)", len(day.Fields))
+	}
+
+	// Check first fields are date and weekday
+	if day.Fields[0] != "date" {
+		t.Errorf("First day field = %q, want %q", day.Fields[0], "date")
+	}
+
+	if day.Fields[1] != "weekday" {
+		t.Errorf("Second day field = %q, want %q", day.Fields[1], "weekday")
+	}
+
+	// Check hours exist
+	if len(day.Hours) == 0 {
+		t.Fatal("Day.Hours is empty")
+	}
+
+	// Check hour structure - first field should be time
+	hour := day.Hours[0]
+	if len(hour.Fields) < 2 {
+		t.Fatalf("Hour.Fields length = %d, want at least 2 (time, + vars)", len(hour.Fields))
+	}
+
+	if hour.Fields[0] != "time" {
+		t.Errorf("First hour field = %q, want %q", hour.Fields[0], "time")
+	}
+}
+
+// TestService_ForecastVariable_DailyOnly tests daily-only output shaping.
+func TestService_ForecastVariable_DailyOnly(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:          52.52,
+		Longitude:         13.41,
+		DailyVars:         []string{"temperature_2m_max", "temperature_2m_min", "weather_code"},
+		DailyForecastDays: 7,
+		Units:             "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("ForecastVariable() returned nil result")
+	}
+
+	// Check current and hourly sections are nil
+	if result.Current != nil {
+		t.Error("Current section should be nil for daily-only request")
+	}
+
+	if result.Hourly != nil {
+		t.Error("Hourly section should be nil for daily-only request")
+	}
+
+	// Check daily section
+	if result.Daily == nil {
+		t.Fatal("Daily section is nil")
+	}
+
+	// Check fields - should start with date, weekday
+	if len(result.Daily.Fields) < 3 {
+		t.Fatalf("Daily.Fields length = %d, want at least 3 (date, weekday, + vars)", len(result.Daily.Fields))
+	}
+
+	if result.Daily.Fields[0] != "date" {
+		t.Errorf("First field = %q, want %q", result.Daily.Fields[0], "date")
+	}
+
+	if result.Daily.Fields[1] != "weekday" {
+		t.Errorf("Second field = %q, want %q", result.Daily.Fields[1], "weekday")
+	}
+
+	// Check rows exist
+	if len(result.Daily.Rows) == 0 {
+		t.Fatal("Daily.Rows is empty")
+	}
+}
+
+// TestService_ForecastVariable_Combined tests combined current, hourly, and daily output.
+func TestService_ForecastVariable_Combined(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:            52.52,
+		Longitude:           13.41,
+		CurrentVars:         []string{"temperature_2m", "weather_code"},
+		HourlyVars:          []string{"temperature_2m"},
+		HourlyForecastHours: 24,
+		DailyVars:           []string{"temperature_2m_max"},
+		DailyForecastDays:   7,
+		Units:               "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("ForecastVariable() returned nil result")
+	}
+
+	// All sections should be present
+	if result.Current == nil {
+		t.Fatal("Current section should be present")
+	}
+
+	if result.Hourly == nil {
+		t.Fatal("Hourly section should be present")
+	}
+
+	if result.Daily == nil {
+		t.Fatal("Daily section should be present")
+	}
+}
+
+// TestService_ForecastVariable_WeatherCodeRendering tests weather_code to weather text rendering.
+func TestService_ForecastVariable_WeatherCodeRendering(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:    52.52,
+		Longitude:   13.41,
+		CurrentVars: []string{"weather_code"},
+		Units:       "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil || result.Current == nil {
+		t.Fatal("Current section is nil")
+	}
+
+	// weather_code should be rendered as string text under "weather" field name
+	weatherVal, ok := result.Current.Values["weather"]
+	if !ok {
+		t.Fatal("weather value not found in Current.Values (weather_code should map to weather)")
+	}
+
+	// Check it's a string (weather description)
+	desc, ok := weatherVal.(string)
+	if !ok {
+		t.Fatalf("weather value is not a string, got %T", weatherVal)
+	}
+
+	// Check it's a valid weather description (not a numeric code)
+	if desc == "" {
+		t.Error("weather description is empty")
+	}
+}
+
+// TestService_ForecastVariable_WeekdayDerivation tests weekday derivation for daily and hourly.
+func TestService_ForecastVariable_WeekdayDerivation(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	req := ForecastRequest{
+		Latitude:          52.52,
+		Longitude:         13.41,
+		DailyVars:         []string{"temperature_2m_max"},
+		DailyForecastDays: 3,
+		Units:             "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil || result.Daily == nil {
+		t.Fatal("Daily section is nil")
+	}
+
+	// Check each row has weekday
+	for i, row := range result.Daily.Rows {
+		weekdayVal, ok := row.Values["weekday"]
+		if !ok {
+			t.Fatalf("Row %d: weekday value not found", i)
+		}
+
+		weekday, ok := weekdayVal.(string)
+		if !ok {
+			t.Fatalf("Row %d: weekday is not a string, got %T", i, weekdayVal)
+		}
+
+		// Check it's a valid 3-letter weekday
+		validWeekdays := []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+		valid := false
+		for _, vd := range validWeekdays {
+			if weekday == vd {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			t.Errorf("Row %d: weekday = %q, want one of %v", i, weekday, validWeekdays)
+		}
+	}
+}
+
+// TestService_ForecastVariable_LocationMetadata tests location metadata inclusion.
+func TestService_ForecastVariable_LocationMetadata(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	location := &openmeteo.ResolvedLocation{
+		Latitude:  52.52,
+		Longitude: 13.41,
+		Name:      "Berlin",
+		Country:   "Germany",
+		Admin1:    "Berlin",
+	}
+
+	req := ForecastRequest{
+		Latitude:    52.52,
+		Longitude:   13.41,
+		CurrentVars: []string{"temperature_2m"},
+		Units:       "metric",
+		Location:    location,
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("ForecastVariable() returned nil result")
+	}
+
+	// Check location metadata
+	if result.Meta.Location == nil {
+		t.Fatal("Location metadata is nil")
+	}
+
+	if result.Meta.Location.Name != "Berlin" {
+		t.Errorf("Location.Name = %q, want %q", result.Meta.Location.Name, "Berlin")
+	}
+
+	if result.Meta.Location.Country != "Germany" {
+		t.Errorf("Location.Country = %q, want %q", result.Meta.Location.Country, "Germany")
+	}
+}
+
+// TestService_ForecastVariable_RequestedFieldFiltering tests that only requested fields are included.
+func TestService_ForecastVariable_RequestedFieldFiltering(t *testing.T) {
+	mapper := weathercode.NewMapper()
+	client := openmeteo.NewClient(nil)
+	svc := NewService(client, mapper)
+
+	// Request only temperature_2m and weather_code
+	req := ForecastRequest{
+		Latitude:    52.52,
+		Longitude:   13.41,
+		CurrentVars: []string{"temperature_2m", "weather_code"},
+		Units:       "metric",
+	}
+
+	result, err := svc.ForecastVariable(req)
+	if err != nil {
+		t.Fatalf("ForecastVariable() returned error: %v", err)
+	}
+
+	if result == nil || result.Current == nil {
+		t.Fatal("Current section is nil")
+	}
+
+	// Fields should be: time, temperature_2m, weather (weather_code maps to weather in output)
+	expectedFields := []string{"time", "temperature_2m", "weather"}
+	if len(result.Current.Fields) != len(expectedFields) {
+		t.Fatalf("Current.Fields length = %d, want %d", len(result.Current.Fields), len(expectedFields))
+	}
+
+	for i, ef := range expectedFields {
+		if result.Current.Fields[i] != ef {
+			t.Errorf("Field %d = %q, want %q", i, result.Current.Fields[i], ef)
+		}
+	}
+
+	// Only requested values (plus time) should be present
+	// Note: weather_code request variable becomes "weather" in output
+	for field := range result.Current.Values {
+		if field != "time" && field != "temperature_2m" && field != "weather" {
+			t.Errorf("Unexpected field in values: %s", field)
+		}
 	}
 }

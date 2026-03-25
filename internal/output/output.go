@@ -26,12 +26,12 @@ func NewWriter() *Writer {
 	}
 }
 
-// SetOutput sets the output writer (default is os.Stdout).
+// SetOutput sets the output writer (used by tests).
 func (w *Writer) SetOutput(out io.Writer) {
 	w.out = out
 }
 
-// SetError sets the error output writer (default is os.Stderr).
+// SetError sets the error output writer (used by tests).
 func (w *Writer) SetError(err io.Writer) {
 	w.err = err
 }
@@ -91,6 +91,10 @@ func writeJSON(data interface{}, out io.Writer) error {
 		if d == nil {
 			return fmt.Errorf("cannot write nil DailyOutput")
 		}
+	case *forecast.ForecastOutput:
+		if d == nil {
+			return fmt.Errorf("cannot write nil ForecastOutput")
+		}
 	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
@@ -108,6 +112,12 @@ func writeTOON(data interface{}, out io.Writer) error {
 		if d == nil {
 			return fmt.Errorf("cannot write nil DailyOutput")
 		}
+	case *forecast.ForecastOutput:
+		if d == nil {
+			return fmt.Errorf("cannot write nil ForecastOutput")
+		}
+		// Convert custom types to toon.Object for proper field ordering
+		data = convertForecastOutputForTOON(d)
 	}
 	// Use toon-go to marshal the data directly
 	// time.Time is automatically formatted as RFC3339 by toon-go
@@ -118,4 +128,23 @@ func writeTOON(data interface{}, out io.Writer) error {
 
 	_, err = out.Write([]byte(output))
 	return err
+}
+
+// convertForecastOutputForTOON converts ForecastOutput to use toon.Object for proper field ordering.
+func convertForecastOutputForTOON(fo *forecast.ForecastOutput) toon.Object {
+	fields := []toon.Field{
+		{Key: "meta", Value: fo.Meta},
+	}
+
+	if fo.Current != nil {
+		fields = append(fields, toon.Field{Key: "current", Value: fo.Current.ToTOON()})
+	}
+	if fo.Hourly != nil {
+		fields = append(fields, toon.Field{Key: "hourly", Value: fo.Hourly.ToTOON()})
+	}
+	if fo.Daily != nil {
+		fields = append(fields, toon.Field{Key: "daily", Value: fo.Daily.ToTOON()})
+	}
+
+	return toon.Object{Fields: fields}
 }
