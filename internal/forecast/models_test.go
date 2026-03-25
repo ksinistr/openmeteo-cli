@@ -2,7 +2,6 @@ package forecast
 
 import (
 	"testing"
-	"time"
 )
 
 func getUnits(units string) Units {
@@ -152,16 +151,12 @@ func TestUnits_HasAllFields(t *testing.T) {
 func TestMeta_HasAllFields(t *testing.T) {
 	// Verify Meta struct has all required fields
 	meta := Meta{
-		GeneratedAt: time.Now(),
-		Units:       Units{},
-		Timezone:    "UTC",
-		Latitude:    40.0,
-		Longitude:   -74.0,
+		Units:     Units{},
+		Timezone:  "UTC",
+		Latitude:  40.0,
+		Longitude: -74.0,
 	}
 
-	if meta.GeneratedAt.IsZero() {
-		t.Error("Meta.GeneratedAt should not be zero")
-	}
 	if meta.Timezone == "" {
 		t.Error("Meta.Timezone should not be empty")
 	}
@@ -233,8 +228,8 @@ func TestDay_HasAllFields(t *testing.T) {
 		WindSpeedMax:                10.0,
 		WindGustsMax:                15.0,
 		UVIndexMax:                  5.0,
-		Sunrise:                     "2026-03-22T06:00",
-		Sunset:                      "2026-03-22T18:00",
+		Sunrise:                     "06:00",
+		Sunset:                      "18:00",
 	}
 
 	if day.Date == "" {
@@ -245,37 +240,24 @@ func TestDay_HasAllFields(t *testing.T) {
 	}
 }
 
-func TestTodayOutput_HasAllFields(t *testing.T) {
-	output := TodayOutput{
-		Meta:    Meta{},
-		Current: Current{},
-		Hours:   []Hour{},
+func TestHourlyOutput_HasAllFields(t *testing.T) {
+	output := HourlyOutput{
+		Meta: Meta{},
+		Days: map[string]DayHours{},
 	}
 
-	if len(output.Hours) != 0 {
-		t.Error("TodayOutput.Hours should be initialized to empty slice")
-	}
-}
-
-func TestDayOutput_HasAllFields(t *testing.T) {
-	output := DayOutput{
-		Meta:  Meta{},
-		Day:   Day{},
-		Hours: []Hour{},
-	}
-
-	if len(output.Hours) != 0 {
-		t.Error("DayOutput.Hours should be initialized to empty slice")
+	if len(output.Days) != 0 {
+		t.Error("HourlyOutput.Days should be initialized to empty map")
 	}
 }
 
-func TestWeekOutput_HasAllFields(t *testing.T) {
-	output := WeekOutput{
+func TestDailyOutput_HasAllFields(t *testing.T) {
+	output := DailyOutput{
 		Meta: Meta{},
 		Days: []Day{},
 	}
 
 	if len(output.Days) != 0 {
-		t.Error("WeekOutput.Days should be initialized to empty slice")
+		t.Error("DailyOutput.Days should be initialized to empty slice")
 	}
 }

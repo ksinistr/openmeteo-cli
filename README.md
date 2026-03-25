@@ -8,6 +8,14 @@ A command-line weather tool built especially for AI agents.
 
 The CLI is designed especially for AI agents and automation workflows. `toon` is the default because it stays structured while using fewer tokens than heavier text or JSON output in normal agent conversations.
 
+## Key Features
+
+- **Single `forecast` command** with Open-Meteo-style variable selection for `current`, `hourly`, and `daily` data
+- **Geocoding support** - resolve place names like "Berlin" or "Tokyo" automatically with `--city`
+- **Variable discovery** - built-in help for all available weather variables
+- **Compact output** - requests only the data you ask for, keeping responses lean for AI context windows
+- **Product limits** - capped at 48 hours for hourly data and 14 days for daily data
+
 ## Installation For Humans And Agents
 
 Give this install document to Clawbot or another coding agent:
@@ -47,128 +55,434 @@ The binary will be created at `bin/openmeteo-cli`.
 
 ## Commands
 
-- `today` - Get today's weather forecast with hourly rows
-- `day` - Get weather forecast for a specific date
-- `week` - Get a 7-day weather forecast
+- `forecast` - Get weather forecast with current, hourly, and/or daily data (primary command)
 
 ## Usage
 
+### Primary Command: forecast
+
+The `forecast` command is the primary interface. You must specify at least one of `--current`, `--hourly`, or `--daily`.
+
 ```bash
-openmeteo-cli today --lat <latitude> --lon <longitude> [options]
-openmeteo-cli day --lat <latitude> --lon <longitude> --date YYYY-MM-DD [options]
-openmeteo-cli week --lat <latitude> --lon <longitude> [options]
+# By location name (geocoding)
+openmeteo-cli forecast --city "Berlin" --country "Germany" --current default --hourly default --forecast-hours 24
+
+# By coordinates
+openmeteo-cli forecast --latitude 52.52 --longitude 13.41 --daily default --forecast-days 7
+
+# Current conditions only
+openmeteo-cli forecast --city "Tokyo" --current temperature_2m,weather_code
+
+# Combined request
+openmeteo-cli forecast \
+  --city "New York" \
+  --current temperature_2m,weather_code \
+  --hourly temperature_2m,precipitation_probability \
+  --forecast-hours 24 \
+  --daily weather_code,temperature_2m_max,temperature_2m_min \
+  --forecast-days 7
 ```
+
+### Variable Discovery
+
+List all available variables:
+
+```bash
+# All variables
+openmeteo-cli forecast variables
+
+# Current weather variables
+openmeteo-cli forecast variables current
+
+# Hourly forecast variables
+openmeteo-cli forecast variables hourly
+
+# Daily forecast variables
+openmeteo-cli forecast variables daily
+```
+
+### Compatibility Aliases
+
+The `hourly` and `daily` commands are maintained as compatibility aliases. They map to the new `forecast` command with legacy default variable sets.
+
+```bash
+# Hourly (1-2 days) - compatibility alias
+openmeteo-cli hourly --latitude <latitude> --longitude <longitude> --forecast-days <1-2>
+
+# Daily (1-14 days) - compatibility alias
+openmeteo-cli daily --latitude <latitude> --longitude <longitude> --forecast-days <1-14>
+```
+
+**Migration Note:** These aliases will be maintained for one release cycle to allow downstream tools to update. New code should use the `forecast` command directly.
 
 ## Help
 
-Show help message for the binary or a specific command:
+Show help message:
 
 ```bash
 openmeteo-cli -h
 openmeteo-cli --help
-openmeteo-cli today -h
-openmeteo-cli week --help
+openmeteo-cli forecast --help
+openmeteo-cli forecast variables
+openmeteo-cli hourly --help
+openmeteo-cli daily --help
 ```
 
 ## Options
 
-- `--lat <float>` - Latitude coordinate (required, -90 to 90)
-- `--lon <float>` - Longitude coordinate (required, -180 to 180)
-- `--date YYYY-MM-DD` - Date for the day command (required for `day` command)
+### Forecast Command Options
+
+- `--city <name>` - City name for geocoding (e.g., "Berlin", "Tokyo, Germany")
+- `--country <name>` - Country name to narrow geocoding results (optional)
+- `--latitude <float>` - Latitude coordinate (-90 to 90)
+- `--longitude <float>` - Longitude coordinate (-180 to 180)
+  - `--city` cannot be combined with `--latitude`/`--longitude`
+  - `--latitude` and `--longitude` must be provided together when using coordinates
+
+- `--current <vars>` - Current weather variables as comma-separated list or `default`
+- `--hourly <vars>` - Hourly forecast variables as comma-separated list or `default`
+- `--daily <vars>` - Daily forecast variables as comma-separated list or `default`
+  - At least one of `--current`, `--hourly`, or `--daily` is required
+  - Use `default` for a sensible set of common variables
+  - Variable names use Open-Meteo API field names
+
+- `--forecast-hours <int>` - Number of hours for hourly forecast (required with `--hourly`, 1-48)
+- `--forecast-days <int>` - Number of days for daily forecast (required with `--daily`, 1-14)
+
 - `--units metric|imperial` - Units: metric (default) or imperial
 - `--format toon|json` - Output format: toon (default) or json
 
+## Default Variable Sets
+
+### Current Default
+`temperature_2m`, `apparent_temperature`, `precipitation`, `wind_speed_10m`, `weather_code`
+
+### Hourly Default
+`temperature_2m`, `precipitation_probability`, `precipitation`, `wind_speed_10m`, `weather_code`
+
+### Daily Default
+`weather_code`, `temperature_2m_min`, `temperature_2m_max`, `precipitation_sum`, `precipitation_probability_max`, `wind_speed_10m_max`, `wind_gusts_10m_max`, `uv_index_max`, `sunrise`, `sunset`
+
+## Available Variables
+
+### Current Weather Variables
+
+| Variable | Description |
+|----------|-------------|
+| `temperature_2m` | Air temperature at 2 meters above ground |
+| `relative_humidity_2m` | Relative humidity at 2 meters above ground |
+| `dew_point_2m` | Dew point temperature at 2 meters above ground |
+| `apparent_temperature` | Apparent temperature feels like |
+| `pressure_msl` | Sea level air pressure |
+| `cloud_cover` | Total cloud coverage as percentage |
+| `cloud_cover_low` | Low-level cloud coverage as percentage |
+| `cloud_cover_mid` | Mid-level cloud coverage as percentage |
+| `cloud_cover_high` | High-level cloud coverage as percentage |
+| `wind_speed_10m` | Wind speed at 10 meters above ground |
+| `wind_speed_80m` | Wind speed at 80 meters above ground |
+| `wind_direction_10m` | Wind direction at 10 meters above ground |
+| `wind_direction_80m` | Wind direction at 80 meters above ground |
+| `wind_gusts_10m` | Wind gust speed at 10 meters above ground |
+| `shortwave_radiation` | Shortwave solar radiation |
+| `direct_radiation` | Direct solar radiation |
+| `diffuse_radiation` | Diffuse solar radiation |
+| `direct_normal_irradiance` | Direct normal irradiance |
+| `global_tilted_irradiance` | Global tilted irradiance for panels |
+| `weather_code` | Weather condition code |
+| `snow_depth` | Snow depth on ground |
+| `precipitation` | Total precipitation (rain, showers, snow) |
+| `showers` | Precipitation from showers in mm |
+| `rain` | Precipitation from rain in mm |
+| `precipitation_probability` | Probability of precipitation as percentage |
+| `visibility` | Horizontal view distance in km |
+| `evapotranspiration` | Reference evapotranspiration |
+| `uv_index` | UV index |
+| `is_day` | 1 for daytime, 0 for nighttime |
+| `soil_temperature_0_to_7cm` | Soil temperature at 0-7cm depth |
+| `soil_temperature_7_to_28cm` | Soil temperature at 7-28cm depth |
+| `soil_temperature_28_to_100cm` | Soil temperature at 28-100cm depth |
+| `soil_temperature_100_to_255cm` | Soil temperature at 100-255cm depth |
+| `soil_moisture_0_to_7cm` | Soil moisture content at 0-7cm depth |
+| `soil_moisture_7_to_28cm` | Soil moisture content at 7-28cm depth |
+| `soil_moisture_28_to_100cm` | Soil moisture content at 28-100cm depth |
+| `soil_moisture_100_to_255cm` | Soil moisture content at 100-255cm depth |
+
+### Hourly Forecast Variables
+
+Includes all current weather variables plus:
+| Variable | Description |
+|----------|-------------|
+| `soil_temperature_0_to_7cm` | Soil temperature at 0-7cm depth |
+| `soil_temperature_7_to_28cm` | Soil temperature at 7-28cm depth |
+| `soil_temperature_28_to_100cm` | Soil temperature at 28-100cm depth |
+| `soil_temperature_100_to_255cm` | Soil temperature at 100-255cm depth |
+| `soil_moisture_0_to_7cm` | Soil moisture content at 0-7cm depth |
+| `soil_moisture_7_to_28cm` | Soil moisture content at 7-28cm depth |
+| `soil_moisture_28_to_100cm` | Soil moisture content at 28-100cm depth |
+| `soil_moisture_100_to_255cm` | Soil moisture content at 100-255cm depth |
+
+### Daily Forecast Variables
+
+| Variable | Description |
+|----------|-------------|
+| `weather_code` | Weather condition code (noon) |
+| `temperature_2m_max` | Maximum air temperature |
+| `temperature_2m_min` | Minimum air temperature |
+| `apparent_temperature_max` | Maximum apparent temperature |
+| `apparent_temperature_min` | Minimum apparent temperature |
+| `precipitation_sum` | Total precipitation sum |
+| `precipitation_probability_max` | Maximum daily precipitation probability |
+| `precipitation_hours` | Number of hours with precipitation |
+| `showers_sum` | Precipitation from showers sum |
+| `rain_sum` | Precipitation from rain sum |
+| `snowfall_sum` | Snowfall sum |
+| `snow_depth` | Snow depth on ground |
+| `wind_speed_10m_max` | Maximum wind speed at 10m |
+| `wind_gusts_10m_max` | Maximum wind gust speed at 10m |
+| `wind_direction_10m_dominant` | Dominant wind direction at 10m |
+| `shortwave_radiation_sum` | Total shortwave radiation |
+| `et0_fao_evapotranspiration` | Reference evapotranspiration |
+| `uv_index_max` | Maximum UV index |
+| `uv_index_clear_sky_max` | Maximum clear sky UV index |
+| `sunrise` | Sunrise time |
+| `sunset` | Sunset time |
+| `daylight_duration` | Daylight duration in seconds |
+| `sunshine_duration` | Sunshine duration in seconds |
+
 ## Examples
 
-### Today's weather for New York City
+### Using location names (geocoding)
+
 ```bash
-openmeteo-cli today --lat 40.7128 --lon -74.0060
+# Current conditions for Berlin
+openmeteo-cli forecast --city "Berlin" --country "Germany" --current default
+
+# 24-hour hourly forecast for Tokyo
+openmeteo-cli forecast --city "Tokyo" --country "Japan" --hourly default --forecast-hours 24
+
+# 7-day daily forecast for New York
+openmeteo-cli forecast --city "New York" --country "USA" --daily default --forecast-days 7
+
+# Combined request with custom variables for London
+openmeteo-cli forecast --city "London" --country "UK" \
+  --current temperature_2m,weather_code \
+  --hourly temperature_2m,precipitation_probability \
+  --forecast-hours 24 \
+  --daily weather_code,temperature_2m_max,temperature_2m_min \
+  --forecast-days 5
 ```
 
-### Weather for a specific date
+### Using coordinates
+
 ```bash
-openmeteo-cli day --lat 40.7128 --lon -74.0060 --date 2026-03-22
+# Current-only request
+openmeteo-cli forecast --latitude 52.52 --longitude 13.41 --current temperature_2m,weather_code
+
+# Hourly-only request (max 48 hours)
+openmeteo-cli forecast --latitude 40.7128 --longitude -74.006 \
+  --hourly temperature_2m,precipitation_probability,wind_speed_10m \
+  --forecast-hours 48
+
+# Daily-only request (max 14 days)
+openmeteo-cli forecast --latitude 35.6762 --longitude 139.6503 \
+  --daily weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum \
+  --forecast-days 14
+
+# Combined request with all sections
+openmeteo-cli forecast \
+  --latitude 51.5074 --longitude -0.1278 \
+  --current default \
+  --hourly default --forecast-hours 24 \
+  --daily default --forecast-days 7
 ```
 
-### 7-day forecast with imperial units
+### Imperial units and JSON output
+
 ```bash
-openmeteo-cli week --lat 40.7128 --lon -74.0060 --units imperial
+# Imperial units
+openmeteo-cli forecast --city "Los Angeles" --country "USA" --current default --units imperial
+
+# JSON output for automation
+openmeteo-cli forecast --city "Paris" --country "France" --daily default --forecast-days 7 --format json
+
+# Combined
+openmeteo-cli forecast --city "Sydney" --country "Australia" \
+  --current temperature_2m,wind_speed_10m \
+  --hourly temperature_2m,precipitation_probability \
+  --forecast-hours 24 \
+  --units imperial \
+  --format json
 ```
 
-### JSON output for debugging
+### Variable discovery
+
 ```bash
-openmeteo-cli today --lat 40.7128 --lon -74.0060 --format json
+# Show all available variables
+openmeteo-cli forecast variables
+
+# Show current weather variables
+openmeteo-cli forecast variables current
+
+# Show hourly forecast variables
+openmeteo-cli forecast variables hourly
+
+# Show daily forecast variables
+openmeteo-cli forecast variables daily
 ```
 
-### Using different locations
+### Using the default keyword
 
-**London, UK:**
 ```bash
-openmeteo-cli today --lat 51.5074 --lon -0.1278
-openmeteo-cli week --lat 51.5074 --lon -0.1278 --units metric
-```
+# Current weather with default variables
+openmeteo-cli forecast --city "Berlin" --country "Germany" --current default
 
-**Tokyo, Japan:**
-```bash
-openmeteo-cli today --lat 35.6762 --lon 139.6503
-```
+# Hourly with default variables
+openmeteo-cli forecast --city "Tokyo" --country "Japan" --hourly default --forecast-hours 24
 
-**Sydney, Australia:**
-```bash
-openmeteo-cli week --lat -33.8688 --lon 151.2093 --units imperial
-```
+# Daily with default variables
+openmeteo-cli forecast --city "New York" --country "USA" --daily default --forecast-days 7
 
-### Getting hourly forecast for a past or future date
-```bash
-openmeteo-cli day --lat 34.0522 --lon -118.2437 --date 2026-04-15
+# Combined: default for some sections, custom for others
+openmeteo-cli forecast --city "London" --country "UK" \
+  --current default \
+  --hourly temperature_2m,precipitation_probability \
+  --forecast-hours 24 \
+  --daily default \
+  --forecast-days 5
 ```
 
 ## Defaults
 
 - Units: `metric`
 - Format: `toon`
+- Forecast hours limit: 48
+- Forecast days limit: 14
+
+## Validation Rules
+
+- At least one of `--current`, `--hourly`, or `--daily` is required
+- `--forecast-hours` is required with `--hourly` and must be between 1 and 48
+- `--forecast-days` is required with `--daily` and must be between 1 and 14
+- `--city` cannot be combined with `--latitude` or `--longitude`
+- `--latitude` and `--longitude` must be provided together when using coordinates
+- Variable names must be valid Open-Meteo API field names
+- Duplicate variable names are rejected
+- `default` is a valid explicit value for `--current`, `--hourly`, and `--daily`
+
+## Geocoding
+
+When using `--city`, the CLI queries the Open-Meteo geocoding API to resolve the place name to coordinates. The resolved location metadata is included in the output.
+
+- If the query returns no results, a validation error is returned
+- If the query returns multiple plausible results, a validation error is returned asking for refinement (use `--country` to narrow)
+- The resolved place name and country are included in the output metadata
 
 ## Output Format Notes
 
 ### TOON Format (default)
+
 TOON is a compact, human-readable text format designed for structured data and low token usage in agent workflows. Key features:
-- Uses `#` prefix for section headers
-- Key-value pairs on separate lines with `  ` (two-space) indentation
+- Uses YAML-like structure with key-value pairs
 - Numeric values remain numeric (not quoted strings)
-- Next line after a table header, not on the same line
+- Sections for `meta`, `current`, `hourly`, and `daily`
 
 Example:
-```
-# meta
-  generated_at 2026-03-21T14:30
-  timezone Europe/London
-  latitude 51.5074
-  longitude -0.1278
-# units
-  temperature C
-  humidity %
-  wind_speed km/h
-  ...
-```
+
+```toon
+meta:
+  units:
+    temperature: C
+    humidity: %
+    wind_speed: km/h
+    wind_direction: deg
+    precipitation: mm
+    precipitation_probability: %
+    uv_index: index
+  timezone: Europe/Berlin
+  latitude: 52.52
+  longitude: 13.419998
+  location:
+    name: Berlin
+    country: Germany
+current:
+  time: "2026-03-25T12:00"
+  temperature_2m: 10.3
+  apparent_temperature: 4.5
+  precipitation: 0.1
+  wind_speed_10m: 27
+  weather: Slight rain showers
+daily[3]:
+  - date: 2026-03-25
+    weekday: Wed
+    weather: Slight rain showers
+    temperature_2m_min: 5.4
+    temperature_2m_max: 13.1
+    precipitation_sum: 0.7
+    precipitation_probability_max: 100
+    wind_speed_10m_max: 27
+    wind_gusts_10m_max: 65.9
+    uv_index_max: 3.55
+    sunrise: "05:56"
+    sunset: "18:27"
+  - date: 2026-03-26
+    weekday: Thu
+    weather: Overcast
+    temperature_2m_min: 1.9
+    temperature_2m_max: 8.4
+    precipitation_sum: 0.1
+    precipitation_probability_max: 53
+    ...
 
 ### JSON Format
+
 Standard JSON output with full pretty-printing. Use for programmatic consumption or debugging.
 
 Example:
+
 ```json
 {
   "meta": {
-    "generated_at": "2026-03-21T14:30:00Z",
     "units": {
       "temperature": "C",
       "humidity": "%",
-      ...
+      "wind_speed": "km/h",
+      "wind_direction": "deg",
+      "precipitation": "mm",
+      "precipitation_probability": "%",
+      "uv_index": "index"
     },
-    ...
+    "timezone": "Europe/Berlin",
+    "latitude": 52.52,
+    "longitude": 13.419998,
+    "location": {
+      "name": "Berlin",
+      "country": "Germany"
+    }
   },
   "current": {
-    ...
-  }
+    "time": "2026-03-25T12:00",
+    "temperature_2m": 10.3,
+    "apparent_temperature": 4.5,
+    "precipitation": 0.1,
+    "wind_speed_10m": 27,
+    "weather": "Slight rain showers"
+  },
+  "daily": [
+    {
+      "date": "2026-03-25",
+      "weekday": "Wed",
+      "weather": "Slight rain showers",
+      "temperature_2m_min": 5.4,
+      "temperature_2m_max": 13.1,
+      "precipitation_sum": 0.7,
+      "precipitation_probability_max": 100,
+      "wind_speed_10m_max": 27,
+      "wind_gusts_10m_max": 65.9,
+      "uv_index_max": 3.55,
+      "sunrise": "05:56",
+      "sunset": "18:27"
+    }
+  ]
 }
 ```
 
@@ -179,22 +493,30 @@ Example:
 #### Syntax
 
 ```bash
-openmeteo-cli <command> --lat <float> --lon <float> [options]
+openmeteo-cli forecast --city <place> --country <country> | --latitude <lat> --longitude <lon> \
+  (--current <vars> | --hourly <vars> --forecast-hours <n> | --daily <vars> --forecast-days <n>)... \
+  [options]
 ```
 
 #### Commands
 
-| Command | Description | Required Options | Optional Options |
-|---------|-------------|------------------|------------------|
-| `today` | Get today's forecast with hourly rows | `--lat`, `--lon` | `--units`, `--format` |
-| `day` | Get forecast for a specific date | `--lat`, `--lon`, `--date` | `--units`, `--format` |
-| `week` | Get 7-day forecast | `--lat`, `--lon` | `--units`, `--format` |
+- `forecast`: Get weather forecast with current, hourly, and/or daily data (primary)
 
 #### Required Options
 
-- `--lat <float>`: Latitude coordinate (must be between -90 and 90)
-- `--lon <float>`: Longitude coordinate (must be between -180 and 180)
-- `--date YYYY-MM-DD`: Required only for the `day` command
+At least one section must be specified:
+- `--current <vars>`: Current weather variables (comma-separated or `default`)
+- `--hourly <vars>`: Hourly forecast variables (comma-separated or `default`), requires `--forecast-hours`
+- `--daily <vars>`: Daily forecast variables (comma-separated or `default`), requires `--forecast-days`
+
+Location (one of):
+- `--city <place>`: City name for geocoding
+- `--country <country>`: Country name to narrow results (optional, recommended)
+- `--latitude <lat> --longitude <lon>`: Explicit coordinates
+
+Range limits:
+- `--forecast-hours <n>`: Required with `--hourly`, 1-48
+- `--forecast-days <n>`: Required with `--daily`, 1-14
 
 #### Optional Options
 
@@ -203,110 +525,88 @@ openmeteo-cli <command> --lat <float> --lon <float> [options]
 
 ### Output Schema
 
-All commands return a consistent structure with command-specific data.
+#### Meta Object (all outputs)
 
-#### Meta Object (all commands)
-Metadata about the forecast generation and location.
+Metadata about the forecast generation, location, and units.
 
 ```json
 {
-  "generated_at": "2026-03-21T14:30:00Z",
-  "units": { ... },
-  "timezone": "Europe/London",
-  "latitude": 51.5074,
-  "longitude": -0.1278
+  "units": {
+    "temperature": "C",
+    "humidity": "%",
+    "wind_speed": "km/h",
+    "wind_direction": "deg",
+    "precipitation": "mm",
+    "precipitation_probability": "%",
+    "uv_index": "index"
+  },
+  "timezone": "Europe/Berlin",
+  "latitude": 52.52,
+  "longitude": 13.419998,
+  "location": {
+    "name": "Berlin",
+    "country": "Germany"
+  }
 }
 ```
 
-#### Units Object (all commands)
-Units for all numeric fields in the response.
+#### Current Section
+
+Present when `--current` is specified. Always includes `time`.
 
 ```json
 {
-  "temperature": "C",
-  "humidity": "%",
-  "wind_speed": "km/h",
-  "wind_direction": "deg",
-  "precipitation": "mm",
-  "precipitation_probability": "%",
-  "uv_index": "index"
+  "time": "2026-03-25T12:00",
+  "temperature_2m": 10.3,
+  "apparent_temperature": 4.5,
+  "precipitation": 0.1,
+  "wind_speed_10m": 27,
+  "weather": "Slight rain showers"
 }
 ```
 
-#### Current Object (today command)
-Current weather conditions.
+#### Hourly Section
+
+Present when `--hourly` is specified. Grouped by day with fixed leading fields `date`, `weekday`, and `time`.
 
 ```json
-{
-  "time": "14:30",
-  "weather": "Mainly clear",
-  "temperature": 12.5,
-  "apparent_temperature": 10.2,
-  "humidity": 65,
-  "precipitation": 0.0,
-  "precipitation_probability": 10,
-  "wind_speed": 15.3,
-  "wind_gusts": 22.1,
-  "wind_direction": 245,
-  "uv_index": 3.2
-}
+[
+  {
+    "date": "2026-03-25",
+    "weekday": "Wed",
+    "hours": [
+      {
+        "time": "00:00",
+        "temperature_2m": 6.1,
+        "precipitation_probability": 0,
+        "weather": "Clear"
+      }
+    ]
+  }
+]
 ```
 
-#### Day Object (day command)
-Daily summary for the requested date.
+#### Daily Section
+
+Present when `--daily` is specified. Each row has fixed leading fields `date` and `weekday`.
 
 ```json
-{
-  "date": "2026-03-22",
-  "weather": "Partly cloudy",
-  "temp_min": 8.1,
-  "temp_max": 16.3,
-  "precipitation_sum": 2.5,
-  "precipitation_probability_max": 30,
-  "wind_speed_max": 18.7,
-  "wind_gusts_max": 25.4,
-  "uv_index_max": 4.1,
-  "sunrise": "2026-03-22T06:30:00Z",
-  "sunset": "2026-03-22T19:45:00Z"
-}
-```
-
-#### Hours Array (today and day commands)
-Hourly forecast rows for the requested local date.
-
-```json
-{
-  "time": "14:00",
-  "weather": "Mainly clear",
-  "temperature": 13.1,
-  "apparent_temperature": 10.8,
-  "humidity": 62,
-  "precipitation": 0.0,
-  "precipitation_probability": 10,
-  "wind_speed": 14.5,
-  "wind_gusts": 21.3,
-  "wind_direction": 242,
-  "uv_index": 3.5
-}
-```
-
-#### Days Array (week command)
-7 daily forecast rows starting from the current local date.
-
-```json
-{
-  "date": "2026-03-22",
-  "weather": "Partly cloudy",
-  "temp_min": 8.1,
-  "temp_max": 16.3,
-  "precipitation_sum": 2.5,
-  "precipitation_probability_max": 30,
-  "wind_speed_max": 18.7,
-  "wind_gusts_max": 25.4,
-  "uv_index_max": 4.1,
-  "sunrise": "2026-03-22T06:30:00Z",
-  "sunset": "2026-03-22T19:45:00Z"
-}
+[
+  {
+    "date": "2026-03-25",
+    "weekday": "Wed",
+    "weather": "Overcast",
+    "temperature_2m_min": 5.4,
+    "temperature_2m_max": 13.1,
+    "precipitation_sum": 0.7,
+    "precipitation_probability_max": 100,
+    "wind_speed_10m_max": 27,
+    "wind_gusts_10m_max": 65.9,
+    "uv_index_max": 3.55,
+    "sunrise": "05:56",
+    "sunset": "18:27"
+  }
+]
 ```
 
 ### Weather Code Mapping
@@ -348,17 +648,10 @@ Unknown codes are reported as `Unknown weather code: <code>`.
 
 ### Time Formatting
 
-- `generated_at`: Full ISO 8601 timestamp (e.g., `2026-03-21T14:30:00Z`)
-- `sunrise`/`sunset` (day/week): Full local ISO 8601 timestamps
-- `time` (hourly rows): Local time as `HH:MM` (e.g., `14:30`)
-
-### Date Filtering Rules
-
-- `today`: Returns hourly rows for the current local forecast date based on the location's timezone
-- `day`: Returns hourly rows for the requested local date
-- `week`: Returns exactly 7 consecutive daily rows starting from the current local date
-
-**Note:** DST transitions may result in 23 or 25 hourly rows for a local day instead of 24.
+- `time`: Local time as `YYYY-MM-DDTHH:MM` (e.g., `2026-03-25T12:00`)
+- `date`: Date as `YYYY-MM-DD` (e.g., `2026-03-25`)
+- `weekday`: Abbreviated weekday name (e.g., `Mon`, `Tue`, `Wed`)
+- `sunrise`/`sunset` (daily): Local time as `HH:MM` (e.g., `06:30`, `19:45`)
 
 ## Exit Codes
 
@@ -366,7 +659,7 @@ Unknown codes are reported as `Unknown weather code: <code>`.
 |------|-------------|
 | 0 | Success |
 | 2 | Invalid arguments (missing required options, invalid flag format) |
-| 3 | Validation error (lat/lon out of range, invalid units/format, invalid date format) |
+| 3 | Validation error (lat/lon out of range, invalid units/format, missing sections, bad variable names, geocoding failures) |
 | 4 | Upstream API error (network issue, Open-Meteo API error) |
 | 5 | Requested date unavailable (date outside forecast range) |
 | 6 | Output encoding error |
