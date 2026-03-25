@@ -42,7 +42,7 @@ openmeteo-cli forecast variables daily
 
 ## Guidance
 
-- Prefer `--city` with `--country` for better geocoding UX (e.g., "Berlin", "Tokyo, Japan")
+- Prefer `--city` with `--country` for better geocoding UX (example: --city "Tokyo" --country "Japan")
 - Use `--current` for current conditions, `--hourly` for hourly forecast (max 48 hours), `--daily` for daily forecast (max 14 days)
 - Use `default` for sensible variable sets, or specify comma-separated variables (e.g., `temperature_2m,weather_code`)
 - `--forecast-hours` is required with `--hourly` (1-48)
@@ -86,10 +86,13 @@ openmeteo-cli forecast --latitude 40.7128 --longitude -74.006 --daily default --
 ## Default Variable Sets
 
 ### Current Default
+
 `temperature_2m`, `apparent_temperature`, `precipitation`, `wind_speed_10m`, `weather_code`
 
 ### Hourly Default
+
 `temperature_2m`, `precipitation_probability`, `precipitation`, `wind_speed_10m`, `weather_code`
 
 ### Daily Default
+
 `weather_code`, `temperature_2m_min`, `temperature_2m_max`, `precipitation_sum`, `precipitation_probability_max`, `wind_speed_10m_max`, `wind_gusts_10m_max`, `uv_index_max`, `sunrise`, `sunset`
